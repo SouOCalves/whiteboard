@@ -6,12 +6,16 @@ import ThrottlingService from "./services/ThrottlingService";
 import ConfigService from "./services/ConfigService";
 import html2canvas from "html2canvas";
 import DOMPurify from "dompurify";
+import "hammerjs";
 
 const RAD_TO_DEG = 180.0 / Math.PI;
 const DEG_TO_RAD = Math.PI / 180.0;
 const _45_DEG_IN_RAD = 45 * DEG_TO_RAD;
 
 const whiteboard = {
+    expression: null,
+    pressedSymbol: { drawId: null, amountPressed: null },
+    selectedSymbols: [],
     canvas: null,
     ctx: null,
     drawcolor: "black",
@@ -59,6 +63,99 @@ const whiteboard = {
      * @type Point
      */
     lastPointerPosition: new Point(0, 0),
+    selectDrawId: function (drawId) {
+        for (let item of this.drawBuffer) {
+            if (item.drawId === drawId) {
+                item.c = "rgba(230, 20, 20, 0.8)";
+            }
+        }
+    },
+    getNodeFromDrawId: function (drawId, rootNode) {
+        if (rootNode.symbol != undefined && rootNode.symbol.drawId == drawId) {
+            return rootNode;
+        }
+        if (rootNode.firstChild != undefined) {
+            let node = this.getNodeFromDrawId(drawId, rootNode.firstChild);
+            if (node != undefined) {
+                return node;
+            }
+        }
+        if (rootNode.frontSibling != undefined) {
+            let node = this.getNodeFromDrawId(drawId, rootNode.frontSibling);
+            if (node != undefined) {
+                return node;
+            }
+        }
+    },
+    getAllSymbolsFromExpNode: function (node, result = [], firstNode = true) {
+        if (node.symbol != undefined) {
+            result.push(node.symbol);
+        }
+        if (node.firstChild != undefined) {
+            result = this.getAllSymbolsFromExpNode(node.firstChild, result, false);
+        }
+        if (node.frontSibling != undefined && !firstNode) {
+            result = this.getAllSymbolsFromExpNode(node.frontSibling, result, false);
+        }
+        return result;
+    },
+    getAllSymbolsBackExpansion: function (node) {
+        let result = [];
+        if (node.exp == true) {
+            result = this.getAllSymbolsFromExpNode(node).concat(result);
+        } else if (node.symbol.tagName == "mi") {
+            result = [node.symbol].concat(result);
+        } else if (node.symbol.tagName == "mo") {
+            result = [node.symbol].concat(result);
+        }
+        return result;
+    },
+    getOneFrontExpansion: function (node) {
+        let result = [];
+        console.log(node);
+        if (node.frontSibling == undefined) {
+            if (node.parent == undefined) {
+                return result;
+            }
+            return this.getOneFrontExpansion(node.parent);
+        } else if (node.frontSibling.exp == true) {
+            result = result.concat(this.getAllSymbolsFromExpNode(node.frontSibling));
+            return result;
+        } else if (node.frontSibling.symbol.tagName == "mi") {
+            result = result.concat(node.frontSibling.symbol);
+            return result;
+        } else if (node.frontSibling.symbol.tagName == "mo") {
+            result = result.concat(node.frontSibling.symbol);
+        }
+        return result.concat(this.getOneFrontExpansion(node.frontSibling));
+    },
+    getAllSymbolsFrontExpansion: function (node, expansionAmount) {
+        let result = [];
+        let lastSymbol = node.symbol;
+        result.push(node.symbol);
+        for (let i = 0; i < expansionAmount; i++) {
+            result = result.concat(
+                this.getOneFrontExpansion(
+                    this.getNodeFromDrawId(lastSymbol.drawId, this.expression.rootNode)
+                )
+            );
+            lastSymbol = result.slice(-1)[0];
+        }
+        return result;
+    },
+    expandSelection: function (node, amountPressed) {
+        console.log("zaaaa");
+        console.log(amountPressed);
+        if (node.symbol.tagName == "mo") {
+            let symbolsBackExpansion = this.getAllSymbolsBackExpansion(node.backSibling);
+            let result = symbolsBackExpansion.concat(
+                this.getAllSymbolsFrontExpansion(node, amountPressed - 1)
+            );
+            return result;
+        }
+        this.pressedSymbol.amountPressed = 1;
+        return [node.symbol];
+    },
     loadWhiteboard: function (whiteboardContainer, newSettings) {
         const svgns = "http://www.w3.org/2000/svg";
         const _this = this;
@@ -119,6 +216,119 @@ const whiteboard = {
         this.ctx = this.canvas.getContext("2d");
         this.oldGCO = this.ctx.globalCompositeOperation;
 
+        //////////////////////////////////
+        let myElement = document.getElementById("whiteboardContainer");
+        // Define the "V" shape recognizer
+        var VShapeRecognizer = {
+            name: "v-shape",
+            index: 1,
+            defaults: {
+                threshold: 0.2,
+                pointers: 1,
+                direction: Hammer.DIRECTION_ALL,
+                recognizeWith: { line: [Hammer.DIRECTION_HORIZONTAL] },
+            },
+            attrTest: function (e) {
+                var start = e.gesture.startEvent.center;
+                var end = e.gesture.center;
+                var deltaX = end.clientX - start.clientX;
+                var deltaY = end.clientY - start.clientY;
+
+                // Calculate the angle of the gesture
+                var angle = (Math.atan2(deltaY, deltaX) * 180) / Math.PI;
+
+                // Check if the angle is within a certain range to form a "V" shape
+                if (angle > 45 && angle < 135) {
+                    return true;
+                }
+                return false;
+            },
+        };
+        var mc = new Hammer.Manager(myElement);
+
+        // Register the custom "V" shape recognizer
+        Hammer.plugins.register(VShapeRecognizer);
+
+        // Define the "V" gesture recognizer
+        var VGesture = new Hammer.Pan({
+            event: "v",
+            pointers: 1,
+            threshold: 10,
+            direction: Hammer.DIRECTION_ALL,
+            recognizeWith: { "v-shape": {} },
+        });
+
+        // Add the gesture recognizer to the Hammer.js manager
+        mc.add(VGesture);
+
+        // Bind the "V" gesture event to a callback function
+        mc.on("v", function (e) {
+            console.log("V gesture detected!");
+        });
+
+        // Register the custom "V" gesture recognizer
+        Hammer.gestures.add(Hammer.Gesture.V);
+
+        // Add the gesture recognizer to the Hammer.js manager
+        mc.add(new Hammer.Gesture.V({}));
+
+        // Bind the "V" gesture event to a callback function
+        mc.on("V", function (e) {
+            console.log("V gesture detected!");
+        });
+
+        // hammertime.add(
+        //     new Hammer.Recognizer({
+        //         event: 'v',
+        //         pointers: 1,
+        //         threshold: 20,
+        //         recognizeWith: ['circle'],
+        //         emitOnMove: true,
+        //         lastTouchEvent: null,
+        //         checkDirection: function(event) {
+        //         if (this.lastTouchEvent) {
+        //             const deltaX = event.center.x - this.lastTouchEvent.center.x;
+        //             const deltaY = event.center.y - this.lastTouchEvent.center.y;
+        //             const angle = Math.atan2(deltaY, deltaX) * 180 / Math.PI;
+        //             return (angle > -135 && angle < -45);
+        //         }
+        //         return false;
+        //         },
+        //         reset: function() {
+        //         this.lastTouchEvent = null;
+        //         },
+        //         recognize: function(event) {
+        //         const eventType = event.type;
+        //         const touches = event.touches.length;
+        //         const touchType = 'end'; // set touchType to "end"
+        //         if (eventType === touchType) {
+        //             if (this.checkDirection(event)) {
+        //             this.emit(this.options.event, event);
+        //             this.reset();
+        //             }
+        //         } else {
+        //             this.lastTouchEvent = event;
+        //         }
+        //         }
+        //     })
+        // );
+        // hammertime.on('v', function(event) {
+        //     console.log('V gesture detected!');
+        //   });
+        // hammertime.add(
+        //     new Hammer.Swipe({
+        //         event: 'swiperight',
+        //         direction: Hammer.DIRECTION_RIGHT,
+        //         threshold: 20,
+        //         velocity: 0.1
+        //     })
+        // );
+        // hammertime.on('swiperight', function(event) {
+        //     console.log('Swipe right gesture detected!');
+        // });
+
+        //////////////////////////////////
+
         window.addEventListener("resize", function () {
             // Handle resize
             const dbCp = JSON.parse(JSON.stringify(_this.drawBuffer)); // Copy the buffer
@@ -129,9 +339,104 @@ const whiteboard = {
             _this.loadData(dbCp); // draw old content in
         });
 
+        // $(_this.mouseOverlay).on("mousedown touchstart", function (e) {
+        //     _this.mousedown(e);
+        // });
+
+        _this.clicks = 0;
         $(_this.mouseOverlay).on("mousedown touchstart", function (e) {
-            _this.mousedown(e);
+            if (_this.clicks === 0) {
+                // Single click detected
+                _this.clicks = 1;
+                setTimeout(function () {
+                    if (_this.clicks === 1) {
+                        // Single click action
+                        console.log("Single click");
+                        _this.mousedown(e);
+                    } else {
+                        // Double click action
+                        console.log("Double click");
+                        _this.mouseDoubleClick(e);
+                    }
+                    _this.clicks = 0;
+                }, 200); // Change this value to adjust the timeout duration
+            } else {
+                _this.clicks = 2;
+            }
         });
+
+        // $(_this.mouseOverlay).on("dblclick", function (e) {
+        //     _this.mouseDoubleClick(e);
+        // });
+
+        _this.mouseDoubleClick = function (e) {
+            if (_this.imgDragActive || _this.drawFlag) {
+                return;
+            }
+            if (ReadOnlyService.readOnlyActive) return;
+
+            //_this.drawFlag = true;
+
+            const currentPos = Point.fromEvent(e);
+
+            if (_this.tool === "structurer") {
+                console.log("Structurer double click activated!");
+                for (let selected of this.selectedSymbols) {
+                    for (let item of this.drawBuffer) {
+                        if (item.drawId === selected.drawId) {
+                            item.c = "black";
+                        }
+                    }
+                }
+                this.selectedSymbols = [];
+                loop1: for (let item of this.drawBuffer) {
+                    if (
+                        (item.d[0] - 4 <= currentPos.x &&
+                            item.d[0] + 4 >= currentPos.x &&
+                            item.d[1] - 4 <= currentPos.y &&
+                            item.d[1] + 4 >= currentPos.y) ||
+                        (item.d[2] - 4 <= currentPos.x &&
+                            item.d[2] + 4 >= currentPos.x &&
+                            item.d[3] - 4 <= currentPos.y &&
+                            item.d[3] + 4 >= currentPos.y)
+                    ) {
+                        for (let symbol of this.expression.symbols) {
+                            if (symbol.drawId === item.drawId) {
+                                if (symbol.drawId === this.pressedSymbol.drawId) {
+                                    this.pressedSymbol.amountPressed++;
+                                    this.selectedSymbols = this.expandSelection(
+                                        this.getNodeFromDrawId(
+                                            this.pressedSymbol.drawId,
+                                            this.expression.rootNode
+                                        ),
+                                        this.pressedSymbol.amountPressed
+                                    );
+                                    break loop1;
+                                } else {
+                                    this.pressedSymbol.drawId = item.drawId;
+                                    this.pressedSymbol.amountPressed = 2;
+                                    this.selectedSymbols = this.expandSelection(
+                                        this.getNodeFromDrawId(
+                                            this.pressedSymbol.drawId,
+                                            this.expression.rootNode
+                                        ),
+                                        this.pressedSymbol.amountPressed
+                                    );
+                                    break loop1;
+                                }
+                            }
+                        }
+                    }
+                }
+                for (let symbol of this.selectedSymbols) {
+                    this.selectDrawId(symbol.drawId);
+                }
+                this.loadDataInSteps(this.drawBuffer, false, function (stepData) {
+                    //Nothing to do
+                });
+                console.log(this.drawBuffer);
+            }
+        };
 
         _this.mousedown = function (e) {
             if (_this.imgDragActive || _this.drawFlag) {
@@ -152,6 +457,42 @@ const whiteboard = {
                     currentPos.x,
                     currentPos.y,
                 ];
+            } else if (_this.tool === "structurer") {
+                console.log(currentPos.x);
+                for (let selected of this.selectedSymbols) {
+                    for (let item of this.drawBuffer) {
+                        if (item.drawId === selected.drawId) {
+                            item.c = "black";
+                        }
+                    }
+                }
+                this.selectedSymbols = [];
+                loop1: for (let item of this.drawBuffer) {
+                    if (
+                        (item.d[0] - 4 <= currentPos.x &&
+                            item.d[0] + 4 >= currentPos.x &&
+                            item.d[1] - 4 <= currentPos.y &&
+                            item.d[1] + 4 >= currentPos.y) ||
+                        (item.d[2] - 4 <= currentPos.x &&
+                            item.d[2] + 4 >= currentPos.x &&
+                            item.d[3] - 4 <= currentPos.y &&
+                            item.d[3] + 4 >= currentPos.y)
+                    ) {
+                        for (let symbol of this.expression.symbols) {
+                            if (symbol.drawId === item.drawId) {
+                                this.selectDrawId(item.drawId);
+                                this.selectedSymbols.push(symbol);
+                                this.pressedSymbol.drawId = item.drawId;
+                                this.pressedSymbol.amountPressed = 1;
+                                break loop1;
+                            }
+                        }
+                    }
+                }
+                this.loadDataInSteps(this.drawBuffer, false, function (stepData) {
+                    //Nothing to do
+                });
+                console.log(this.drawBuffer);
             } else if (_this.tool === "hand") {
                 _this.startCoords = currentPos;
             } else if (_this.tool === "eraser") {
@@ -1199,6 +1540,7 @@ const whiteboard = {
         if (!username) {
             username = _this.settings.username;
         }
+        console.log(_this.drawBuffer);
         for (var i = _this.drawBuffer.length - 1; i >= 0; i--) {
             if (_this.drawBuffer[i]["username"] == username) {
                 var drawId = _this.drawBuffer[i]["drawId"];

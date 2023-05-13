@@ -51,6 +51,14 @@
                     <i class="fa fa-mouse-pointer"></i>
                 </button>
                 <button
+                    tool="structurer"
+                    title="Modify the expression"
+                    type="button"
+                    class="whiteboard-tool"
+                >
+                    <i class="fa fa-globe"></i>
+                </button>
+                <button
                     tool="hand"
                     title="pan the whiteboard"
                     type="button"
@@ -189,6 +197,25 @@
 
                 <button
                     style="position: relative"
+                    id="uploadInkmlBtn"
+                    title="Load Inkml file to whiteboard"
+                    type="button"
+                >
+                    <i class="far fa-file-alt"></i>
+                    <i
+                        style="
+                            position: absolute;
+                            top: 3px;
+                            left: 2px;
+                            color: #000000;
+                            font-size: 0.5em;
+                        "
+                        class="fas fa-upload"
+                    ></i>
+                </button>
+
+                <button
+                    style="position: relative"
                     id="uploadJsonBtn"
                     title="Load saved JSON to whiteboard"
                     type="button"
@@ -207,6 +234,7 @@
                 </button>
 
                 <input style="display: none" id="myFile" type="file" />
+                <input style="display: none" id="myFileInkml" type="file" />
             </div>
 
             <div class="btn-group">
