@@ -6,13 +6,14 @@ import ThrottlingService from "./services/ThrottlingService";
 import ConfigService from "./services/ConfigService";
 import html2canvas from "html2canvas";
 import DOMPurify from "dompurify";
-import "hammerjs";
+import DollarRecognizer from "./dollarRecognizer";
 
 const RAD_TO_DEG = 180.0 / Math.PI;
 const DEG_TO_RAD = Math.PI / 180.0;
 const _45_DEG_IN_RAD = 45 * DEG_TO_RAD;
 
 const whiteboard = {
+    gesturePath: [],
     expression: null,
     pressedSymbol: { drawId: null, amountPressed: null },
     selectedSymbols: [],
@@ -217,65 +218,65 @@ const whiteboard = {
         this.oldGCO = this.ctx.globalCompositeOperation;
 
         //////////////////////////////////
-        let myElement = document.getElementById("whiteboardContainer");
-        // Define the "V" shape recognizer
-        var VShapeRecognizer = {
-            name: "v-shape",
-            index: 1,
-            defaults: {
-                threshold: 0.2,
-                pointers: 1,
-                direction: Hammer.DIRECTION_ALL,
-                recognizeWith: { line: [Hammer.DIRECTION_HORIZONTAL] },
-            },
-            attrTest: function (e) {
-                var start = e.gesture.startEvent.center;
-                var end = e.gesture.center;
-                var deltaX = end.clientX - start.clientX;
-                var deltaY = end.clientY - start.clientY;
+        // let myElement = document.getElementById("whiteboardContainer");
+        // // Define the "V" shape recognizer
+        // var VShapeRecognizer = {
+        //     name: "v-shape",
+        //     index: 1,
+        //     defaults: {
+        //         threshold: 0.2,
+        //         pointers: 1,
+        //         direction: Hammer.DIRECTION_ALL,
+        //         recognizeWith: { line: [Hammer.DIRECTION_HORIZONTAL] },
+        //     },
+        //     attrTest: function (e) {
+        //         var start = e.gesture.startEvent.center;
+        //         var end = e.gesture.center;
+        //         var deltaX = end.clientX - start.clientX;
+        //         var deltaY = end.clientY - start.clientY;
 
-                // Calculate the angle of the gesture
-                var angle = (Math.atan2(deltaY, deltaX) * 180) / Math.PI;
+        //         // Calculate the angle of the gesture
+        //         var angle = (Math.atan2(deltaY, deltaX) * 180) / Math.PI;
 
-                // Check if the angle is within a certain range to form a "V" shape
-                if (angle > 45 && angle < 135) {
-                    return true;
-                }
-                return false;
-            },
-        };
-        var mc = new Hammer.Manager(myElement);
+        //         // Check if the angle is within a certain range to form a "V" shape
+        //         if (angle > 45 && angle < 135) {
+        //             return true;
+        //         }
+        //         return false;
+        //     },
+        // };
+        // var mc = new Hammer.Manager(myElement);
 
-        // Register the custom "V" shape recognizer
-        Hammer.plugins.register(VShapeRecognizer);
+        // // Register the custom "V" shape recognizer
+        // Hammer.plugins.register(VShapeRecognizer);
 
-        // Define the "V" gesture recognizer
-        var VGesture = new Hammer.Pan({
-            event: "v",
-            pointers: 1,
-            threshold: 10,
-            direction: Hammer.DIRECTION_ALL,
-            recognizeWith: { "v-shape": {} },
-        });
+        // // Define the "V" gesture recognizer
+        // var VGesture = new Hammer.Pan({
+        //     event: "v",
+        //     pointers: 1,
+        //     threshold: 10,
+        //     direction: Hammer.DIRECTION_ALL,
+        //     recognizeWith: { "v-shape": {} },
+        // });
 
-        // Add the gesture recognizer to the Hammer.js manager
-        mc.add(VGesture);
+        // // Add the gesture recognizer to the Hammer.js manager
+        // mc.add(VGesture);
 
-        // Bind the "V" gesture event to a callback function
-        mc.on("v", function (e) {
-            console.log("V gesture detected!");
-        });
+        // // Bind the "V" gesture event to a callback function
+        // mc.on("v", function (e) {
+        //     console.log("V gesture detected!");
+        // });
 
-        // Register the custom "V" gesture recognizer
-        Hammer.gestures.add(Hammer.Gesture.V);
+        // // Register the custom "V" gesture recognizer
+        // Hammer.gestures.add(Hammer.Gesture.V);
 
-        // Add the gesture recognizer to the Hammer.js manager
-        mc.add(new Hammer.Gesture.V({}));
+        // // Add the gesture recognizer to the Hammer.js manager
+        // mc.add(new Hammer.Gesture.V({}));
 
-        // Bind the "V" gesture event to a callback function
-        mc.on("V", function (e) {
-            console.log("V gesture detected!");
-        });
+        // // Bind the "V" gesture event to a callback function
+        // mc.on("V", function (e) {
+        //     console.log("V gesture detected!");
+        // });
 
         // hammertime.add(
         //     new Hammer.Recognizer({
@@ -326,6 +327,36 @@ const whiteboard = {
         // hammertime.on('swiperight', function(event) {
         //     console.log('Swipe right gesture detected!');
         // });
+
+        const whiteboard = document.getElementById("whiteboardContainer");
+        whiteboard.addEventListener('mousedown', startGesture.bind(this));
+        whiteboard.addEventListener('mousemove', continueGesture.bind(this));
+        whiteboard.addEventListener('mouseup', endGesture.bind(this));
+
+        function startGesture(event) {
+            this.gesturePath = [{X: event.clientX, Y: event.clientY}];
+        }
+
+        function continueGesture(event) {
+            if (this.gesturePath.length > 0) {
+                this.gesturePath.push({X: event.clientX, Y: event.clientY });
+            }
+        }
+
+        function endGesture() {
+            if (this.gesturePath.length > 1){
+                console.log(new DollarRecognizer().Recognize(this.gesturePath, true));
+            }
+
+            // // If the gesture matches the "V" shape template, highlight it
+            // if (result.gesture === 'V' && result.score >= matchThreshold) {
+            //     highlightGesture(this.gesturePath);
+            //     //do something
+            // }
+            
+            // Clear the gesture path for the next gesture
+            this.gesturePath = [];
+        }
 
         //////////////////////////////////
 
