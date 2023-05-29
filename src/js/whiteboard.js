@@ -7,6 +7,11 @@ import ConfigService from "./services/ConfigService";
 import html2canvas from "html2canvas";
 import DOMPurify from "dompurify";
 import DollarRecognizer from "./dollarRecognizer";
+import { Symbol } from "./main";
+import { Expression } from "./main";
+import { RoseTreeNode } from "./main";
+import { buildTree } from "./main";
+import { buildParsedTree } from "./main";
 
 const RAD_TO_DEG = 180.0 / Math.PI;
 const DEG_TO_RAD = Math.PI / 180.0;
@@ -14,9 +19,10 @@ const _45_DEG_IN_RAD = 45 * DEG_TO_RAD;
 
 const whiteboard = {
     gesturePath: [],
-    expression: null,
+    expressions: [],
     pressedSymbol: { drawId: null, amountPressed: null },
     selectedSymbols: [],
+    selectionCoordinates: null,
     canvas: null,
     ctx: null,
     drawcolor: "black",
@@ -68,6 +74,241 @@ const whiteboard = {
         for (let item of this.drawBuffer) {
             if (item.drawId === drawId) {
                 item.c = "rgba(230, 20, 20, 0.8)";
+            }
+        }
+    },
+    swapOperator: function (gestureCoordinates) {
+        console.log("Gesture coordinates:");
+        console.log(gestureCoordinates);
+        loop1: for (let item of this.drawBuffer) {
+            if (
+                (item.d[0] - 10 <= gestureCoordinates.X &&
+                    item.d[0] + 10 >= gestureCoordinates.X &&
+                    item.d[1] - 10 <= gestureCoordinates.Y &&
+                    item.d[1] + 10 >= gestureCoordinates.Y) ||
+                    (item.d[2] - 10 <= gestureCoordinates.X &&
+                        item.d[2] + 10 >= gestureCoordinates.X &&
+                        item.d[3] - 10 <= gestureCoordinates.Y &&
+                        item.d[3] + 10 >= gestureCoordinates.Y)
+                        ) {
+                console.log("swapOperator");
+                for (let expression of this.expressions) {
+                    for (let symbol of expression.symbols) {
+                        if (symbol.drawId === item.drawId && symbol.tagName === "mo") {
+                            console.log("swap");
+                            let operatorNode = this.getNodeFromDrawId(symbol.drawId, this.getExpressionFromDrawId(symbol.drawId).rootNode);
+                            console.log(operatorNode);
+                            let backSiblingXCoordinates = this.getXCoordinatesFromNode(operatorNode.backSibling);
+                            let operatorXCoordinates = this.getXCoordinatesFromNode(operatorNode);
+                            let frontSiblingXCoordinates = this.getXCoordinatesFromNode(operatorNode.frontSibling);
+                            console.log(backSiblingXCoordinates);
+                            console.log(operatorXCoordinates);
+                            console.log(frontSiblingXCoordinates);
+                            this.swapCoordinatesOfDrawBuffer(backSiblingXCoordinates, operatorXCoordinates, frontSiblingXCoordinates, operatorNode);
+                            //TODO?? change the order of the expression.symbols
+                            console.log("welelel");
+                            expression.symbols = this.swapExpressionSymbols(expression.symbols, operatorNode, this.getDrawIdsFromNode(operatorNode.backSibling), this.getDrawIdsFromNode(operatorNode.frontSibling));
+                            let [node, remainingString] = buildTree(expression.symbols);
+                            expression.setRootNode(buildParsedTree(node, new RoseTreeNode(true)));
+                            break loop1;
+                        }
+                    }
+                }
+            }
+        }
+    },
+    swapExpressionSymbols: function (symbols, operatorNode, backSiblingIds, frontSiblingIds) {
+        let newArray = [];
+        let backArray = [];
+        let frontArray = [];
+        for (let i = 0; i < symbols.length; i++) {
+            if (backSiblingIds.includes(symbols[i].drawId)) {
+                backArray.push(symbols[i]);
+            }
+            else if (frontSiblingIds.includes(symbols[i].drawId)) {
+                frontArray.push(symbols[i]);
+            }
+        }
+        for (let symbol of symbols) {
+            if (backSiblingIds.includes(symbol.drawId) || frontSiblingIds.includes(symbol.drawId)) {
+                continue;
+            }
+            else if (operatorNode.symbol.drawId == symbol.drawId) {
+                newArray = newArray.concat(frontArray);
+                newArray.push(symbol);
+                newArray = newArray.concat(backArray);
+            }
+            else {
+                newArray.push(symbol);
+            }
+        }
+        return newArray;
+    },
+    swapCoordinatesOfDrawBuffer: function (backSibling, operator, frontSibling, operatorNode) {
+        let backSiblingIds = this.getDrawIdsFromNode(operatorNode.backSibling);
+        let frontSiblingIds = this.getDrawIdsFromNode(operatorNode.frontSibling);
+        let backSiblingVector = -backSibling.X2 + frontSibling.X2;
+        let operatorVector = backSibling.X1 + frontSibling.X2 - operator.X2 - operator.X1;
+        let frontSiblingVector = backSibling.X1 - frontSibling.X1;
+        console.log(backSiblingIds);
+        console.log(frontSiblingIds);
+        for (let item of this.drawBuffer) {
+            if (backSiblingIds.includes(item.drawId)) {
+                item.d[0] = item.d[0] + backSiblingVector;
+                item.d[2] = item.d[2] + backSiblingVector;
+            }
+            else if (item.drawId == operatorNode.symbol.drawId) {
+                item.d[0] = item.d[0] + operatorVector;
+                item.d[2] = item.d[2] + operatorVector;
+            }
+            else if (frontSiblingIds.includes(item.drawId)) {
+                item.d[0] = item.d[0] + frontSiblingVector;
+                item.d[2] = item.d[2] + frontSiblingVector;
+            }
+            
+        }
+        this.canvas.height = this.canvas.height;
+        this.imgContainer.empty();
+        this.loadDataInSteps(this.drawBuffer, false, function (stepData) {
+            //Nothing to do
+        });
+    },
+    getDrawIdsFromNode: function (node) {
+        return this.getAllSymbolsFromExpNode(node).map(({drawId}) => drawId);
+    },
+    getXCoordinatesFromNode: function (node) {
+        return {X1: this.getFirstXCoordinatesFromNode(node), X2: this.getSecondXCoordinatesFromNode(node)};
+    },
+    getFirstXCoordinatesFromNode: function (node) {
+        if (node.exp == true) {
+            return this.getFirstXCoordinatesFromNode(node.firstChild);
+        }
+        else {
+            const filteredArray = this.drawBuffer.filter(obj => obj.drawId === node.symbol.drawId);
+            let smallestX = 99999;
+            for (let item of filteredArray) {
+                if (item.d[0] < smallestX) {
+                    smallestX = item.d[0];
+                }
+                if (item.d[2] < smallestX) {
+                    smallestX = item.d[2];
+                }
+            }
+            return smallestX;
+        }
+    },
+    getSecondXCoordinatesFromNode: function (node) {
+        if (node.exp == true) {
+            return this.getSecondXCoordinatesFromNode(node.lastChild);
+        }
+        else {
+            const filteredArray = this.drawBuffer.filter(obj => obj.drawId === node.symbol.drawId);
+            let biggestX = -99999;
+            for (let item of filteredArray) {
+                if (item.d[0] > biggestX) {
+                    biggestX = item.d[0];
+                }
+                if (item.d[2] > biggestX) {
+                    biggestX = item.d[2];
+                }
+            }
+            return biggestX;
+        }
+    },
+    copySelection: function (gestureCoordinates) {
+        // console.log(this.selectedSymbols);
+        // console.log(gestureCoordinates);
+        // console.log(this.drawBuffer);
+        let sumX = 0;
+        let sumY = 0;
+        let totalCoordinates = 0;
+        let expression = new Expression();
+        let filteredDrawBuffer = this.drawBuffer.filter(item => { return this.selectedSymbols.some(symbol => symbol.drawId === item.drawId);});
+
+        for (let i = 0; i < filteredDrawBuffer.length; i++) {
+            const coordinates = filteredDrawBuffer[i].d;
+            sumX += coordinates[0] + coordinates[2];
+            sumY += coordinates[1] + coordinates[3];
+            totalCoordinates += 2;
+        }
+
+        let selectionMiddlePoint = {X: sumX / totalCoordinates, Y: sumY / totalCoordinates};
+        let vector = {X: gestureCoordinates.X - selectionMiddlePoint.X, Y: gestureCoordinates.Y - selectionMiddlePoint.Y};
+
+        let listedFilteredDrawBuffer = filteredDrawBuffer.reduce((acc, obj) => {
+            const drawId = obj.drawId;
+            if (!acc[drawId]) {
+                acc[drawId] = [];
+            }
+            acc[drawId].push(obj);
+            return acc;
+        }, {});
+        listedFilteredDrawBuffer = Object.values(listedFilteredDrawBuffer);
+
+        console.log("Welelelel");
+        console.log(filteredDrawBuffer);
+        console.log(listedFilteredDrawBuffer);
+        
+        for (let list of listedFilteredDrawBuffer) {
+            let content = [];
+            let newSymbol = new Symbol(list[0]["symbol"], this.drawId, list[0]["tagName"]);
+            expression.appendSymbol(newSymbol);
+            for (let item of list) {
+                let newContent = {};
+                let newCoordinates = [item["d"][0] + vector.X, item["d"][1] + vector.Y, item["d"][2] + vector.X, item["d"][3] + vector.Y];
+                newContent["t"] = item["t"];
+                newContent["d"] = newCoordinates;
+                newContent["c"] = "black";
+                newContent["username"] = whiteboard.settings.username;
+                newContent["th"] = 3;
+                newContent["tagName"] = item["tagName"];
+                newContent["symbol"] = item["symbol"];
+                content.push(newContent);
+            }
+            this.loadDataInSteps(
+                content,
+                true,
+                function (stepData, index) {
+                    if (index >= content.length - 1) {
+                        //Done with all data
+                        this.drawId++;
+                        //console.log(this.drawId);
+                    }
+                }.bind(this)
+            );
+        }
+
+        let [node, remainingString] = buildTree(expression.symbols);
+        expression.setRootNode(buildParsedTree(node, new RoseTreeNode(true)));
+        this.expressions.push(expression);
+    },
+    getGestureCoordinates: function (gesturePath) {
+        let maxX = -99999;
+        let maxY = -99999;
+        let minX = 99999;
+        let minY = 99999;
+        for (let coordinate of gesturePath) {
+            if (coordinate.X > maxX) {
+                maxX = coordinate.X;
+            }
+            else if (coordinate.X < minX) {
+                minX = coordinate.X;
+            }
+            if (coordinate.Y > maxY) {
+                maxY = coordinate.Y;
+            }
+            else if (coordinate.Y < minY) {
+                minY = coordinate.Y;
+            }
+        }
+        return {X: (maxX + minX)/2, Y: (maxY + minY)/2}
+    },
+    getExpressionFromDrawId: function (drawId) {
+        for (let expression of this.expressions) {
+            for (let symbol of expression.symbols) {
+                if (symbol.drawId === drawId) {
+                    return expression;
+                }
             }
         }
     },
@@ -137,7 +378,7 @@ const whiteboard = {
         for (let i = 0; i < expansionAmount; i++) {
             result = result.concat(
                 this.getOneFrontExpansion(
-                    this.getNodeFromDrawId(lastSymbol.drawId, this.expression.rootNode)
+                    this.getNodeFromDrawId(lastSymbol.drawId, this.getExpressionFromDrawId(lastSymbol.drawId).rootNode)
                 )
             );
             lastSymbol = result.slice(-1)[0];
@@ -344,15 +585,22 @@ const whiteboard = {
         }
 
         function endGesture() {
-            if (this.gesturePath.length > 1){
-                console.log(new DollarRecognizer().Recognize(this.gesturePath, true));
+            if (this.gesturePath.length > 1) {
+                console.log(this.gesturePath);
+                let gesture = new DollarRecognizer().Recognize(this.gesturePath, true).Name;
+                console.log(gesture);
+                let gestureCoordinates = this.getGestureCoordinates(this.gesturePath);
+                if (gesture == "v" || gesture == "check") {
+                    console.log("v or check");
+                    this.copySelection(gestureCoordinates);
+                    //console.log(this.gesturePath);
+                    //do something
+                }
+                if (gesture == "circle") {
+                    console.log("circle");
+                    this.swapOperator(gestureCoordinates);
+                }
             }
-
-            // // If the gesture matches the "V" shape template, highlight it
-            // if (result.gesture === 'V' && result.score >= matchThreshold) {
-            //     highlightGesture(this.gesturePath);
-            //     //do something
-            // }
             
             // Clear the gesture path for the next gesture
             this.gesturePath = [];
@@ -375,7 +623,7 @@ const whiteboard = {
         // });
 
         _this.clicks = 0;
-        $(_this.mouseOverlay).on("mousedown touchstart", function (e) {
+        $(_this.mouseOverlay).on("mouseup", function (e) {
             if (_this.clicks === 0) {
                 // Single click detected
                 _this.clicks = 1;
@@ -383,6 +631,7 @@ const whiteboard = {
                     if (_this.clicks === 1) {
                         // Single click action
                         console.log("Single click");
+                        console.log(this.drawId);
                         _this.mousedown(e);
                     } else {
                         // Double click action
@@ -431,29 +680,31 @@ const whiteboard = {
                             item.d[3] - 4 <= currentPos.y &&
                             item.d[3] + 4 >= currentPos.y)
                     ) {
-                        for (let symbol of this.expression.symbols) {
-                            if (symbol.drawId === item.drawId) {
-                                if (symbol.drawId === this.pressedSymbol.drawId) {
-                                    this.pressedSymbol.amountPressed++;
-                                    this.selectedSymbols = this.expandSelection(
-                                        this.getNodeFromDrawId(
-                                            this.pressedSymbol.drawId,
-                                            this.expression.rootNode
-                                        ),
-                                        this.pressedSymbol.amountPressed
-                                    );
-                                    break loop1;
-                                } else {
-                                    this.pressedSymbol.drawId = item.drawId;
-                                    this.pressedSymbol.amountPressed = 2;
-                                    this.selectedSymbols = this.expandSelection(
-                                        this.getNodeFromDrawId(
-                                            this.pressedSymbol.drawId,
-                                            this.expression.rootNode
-                                        ),
-                                        this.pressedSymbol.amountPressed
-                                    );
-                                    break loop1;
+                        for (let expression of this.expressions) {
+                            for (let symbol of expression.symbols) {
+                                if (symbol.drawId === item.drawId) {
+                                    if (symbol.drawId === this.pressedSymbol.drawId) {
+                                        this.pressedSymbol.amountPressed++;
+                                        this.selectedSymbols = this.expandSelection(
+                                            this.getNodeFromDrawId(
+                                                this.pressedSymbol.drawId,
+                                                this.getExpressionFromDrawId(this.pressedSymbol.drawId).rootNode
+                                            ),
+                                            this.pressedSymbol.amountPressed
+                                        );
+                                        break loop1;
+                                    } else {
+                                        this.pressedSymbol.drawId = item.drawId;
+                                        this.pressedSymbol.amountPressed = 2;
+                                        this.selectedSymbols = this.expandSelection(
+                                            this.getNodeFromDrawId(
+                                                this.pressedSymbol.drawId,
+                                                this.getExpressionFromDrawId(this.pressedSymbol.drawId).rootNode
+                                            ),
+                                            this.pressedSymbol.amountPressed
+                                        );
+                                        break loop1;
+                                    }
                                 }
                             }
                         }
@@ -509,13 +760,16 @@ const whiteboard = {
                             item.d[3] - 4 <= currentPos.y &&
                             item.d[3] + 4 >= currentPos.y)
                     ) {
-                        for (let symbol of this.expression.symbols) {
-                            if (symbol.drawId === item.drawId) {
-                                this.selectDrawId(item.drawId);
-                                this.selectedSymbols.push(symbol);
-                                this.pressedSymbol.drawId = item.drawId;
-                                this.pressedSymbol.amountPressed = 1;
-                                break loop1;
+                        for (let expression of this.expressions) {
+                            console.log("yay");
+                            for (let symbol of expression.symbols) {
+                                if (symbol.drawId === item.drawId) {
+                                    this.selectDrawId(item.drawId);
+                                    this.selectedSymbols.push(symbol);
+                                    this.pressedSymbol.drawId = item.drawId;
+                                    this.pressedSymbol.amountPressed = 1;
+                                    break loop1;
+                                }
                             }
                         }
                     }

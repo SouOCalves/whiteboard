@@ -15,7 +15,7 @@ const pdfjsLib = require("pdfjs-dist");
 const fs = require("fs");
 const { parseStringPromise, parseString } = require("xml2js");
 
-class Symbol {
+export class Symbol {
     constructor(symbol, drawId, tagName) {
         this.symbol = symbol;
         this.drawId = drawId;
@@ -23,7 +23,7 @@ class Symbol {
     }
 }
 
-class RoseTreeNode {
+export class RoseTreeNode {
     constructor(isExp) {
         this.exp = isExp;
         this.symbol = undefined;
@@ -59,7 +59,7 @@ class RoseTreeNode {
     }
 }
 
-class Expression {
+export class Expression {
     constructor() {
         this.symbols = [];
         this.rootNode = undefined;
@@ -87,7 +87,21 @@ function getRootNode(node) {
     return getRootNode(node.parent);
 }
 
-function buildTree(expression, targetPrecedence = 0) {
+function removeUndefined(node) {
+    let i = node.children.length;
+    while (i--) {
+        if (node.children[i] instanceof Node) {
+            node.children[i] = removeUndefined(node.children[i]);
+        }
+        else if (node.children[i] === undefined) {
+            node.children.splice(i, 1);
+        }
+    }
+    console.log(node);
+    return node;
+}
+
+export function buildTree(expression, targetPrecedence = 0) {
     let node = new Node();
     node.addChild(expression[0]);
     let remainingString = buildNode(
@@ -96,7 +110,7 @@ function buildTree(expression, targetPrecedence = 0) {
         checkOperator(expression[1]),
         targetPrecedence
     );
-    return [getRootNode(node), remainingString];
+    return [removeUndefined(getRootNode(node)), remainingString];
 }
 
 function buildNode(expression, node, precedence, targetPrecedence) {
@@ -132,7 +146,7 @@ function buildNode(expression, node, precedence, targetPrecedence) {
     }
 }
 
-function buildParsedTree(rootNode, roseTreeRootNode) {
+export function buildParsedTree(rootNode, roseTreeRootNode) {
     let previousChild = undefined;
     for (let i = 0; i < rootNode.children.length; i++) {
         let newRoseTreeNode = undefined;
@@ -923,6 +937,8 @@ function initWhiteboard() {
                                                 newContent["username"] =
                                                     whiteboard.settings.username;
                                                 newContent["th"] = 3;
+                                                newContent["tagName"] = id[1];
+                                                newContent["symbol"] = traceGroup.getElementsByTagName("annotation")[0].innerHTML;
                                                 //console.log(traceGroup);
                                                 content.push(newContent);
                                             }
@@ -946,7 +962,7 @@ function initWhiteboard() {
                     let [node, remainingString] = buildTree(expression.symbols);
                     expression.setRootNode(buildParsedTree(node, new RoseTreeNode(true)));
 
-                    whiteboard.expression = expression;
+                    whiteboard.expressions.push(expression);
                     console.log(expression);
 
                     // parseString(e.target.result, function(err, result) {
