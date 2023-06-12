@@ -108,7 +108,7 @@ const whiteboard = {
                             //TODO?? change the order of the expression.symbols
                             console.log("welelel");
                             expression.symbols = this.swapExpressionSymbols(expression.symbols, operatorNode, this.getDrawIdsFromNode(operatorNode.backSibling), this.getDrawIdsFromNode(operatorNode.frontSibling));
-                            let [node, remainingString] = buildTree(expression.symbols);
+                            let node = buildTree(expression.symbols);
                             expression.setRootNode(buildParsedTree(node, new RoseTreeNode(true)));
                             break loop1;
                         }
@@ -278,7 +278,7 @@ const whiteboard = {
             );
         }
 
-        let [node, remainingString] = buildTree(expression.symbols);
+        let node = buildTree(expression.symbols);
         expression.setRootNode(buildParsedTree(node, new RoseTreeNode(true)));
         this.expressions.push(expression);
     },
@@ -328,6 +328,12 @@ const whiteboard = {
                 return node;
             }
         }
+    },
+    getParentFromNode: function (node) {
+        if (node.parent !== undefined) {
+            return node.parent;
+        }
+        return this.getParentFromNode(node.backSibling);
     },
     getAllSymbolsFromExpNode: function (node, result = [], firstNode = true) {
         if (node.symbol != undefined) {
@@ -388,6 +394,7 @@ const whiteboard = {
     expandSelection: function (node, amountPressed) {
         console.log("zaaaa");
         console.log(amountPressed);
+        console.log(node);
         if (node.symbol.tagName == "mo") {
             let symbolsBackExpansion = this.getAllSymbolsBackExpansion(node.backSibling);
             let result = symbolsBackExpansion.concat(
@@ -397,6 +404,527 @@ const whiteboard = {
         }
         this.pressedSymbol.amountPressed = 1;
         return [node.symbol];
+    },
+    canBeDistributed: function (node) {
+        if (node.firstChild.symbol.symbol !== "(" || node.lastChild.symbol.symbol !== ")") {
+            return false;
+        }
+        if (node.firstChild.frontSibling.frontSibling !== node.lastChild.backSibling.backSibling) {
+            return false;
+        }
+        return true;
+    },
+    distribute: function (firstNode, lastNode) {
+        console.log("In distribute function");
+        let originalExpression = this.getExpressionFromDrawId(firstNode.symbol.drawId);
+        let expressionFirstSymbolsIds = [];
+        let expressionMiddleSymbolsIds = [];
+        let expressionLastSymbolsIds = [];
+        let expressionSymbolsIds = [];
+        let firstPart = true;
+        let middlePart = false;
+        let lastPart = false;
+        for (let symbol of originalExpression.symbols) {
+            expressionSymbolsIds.push(symbol.drawId);
+            if (firstPart) {
+                if (this.getDrawIdsFromNode(firstNode.backSibling).includes(symbol.drawId)) {
+                    firstPart = false;
+                    middlePart = true;
+                    expressionMiddleSymbolsIds.push(symbol.drawId);
+                }
+                else {
+                    expressionFirstSymbolsIds.push(symbol.drawId);
+                }
+            }
+            else if (middlePart) {
+                if (symbol === lastNode.frontSibling.frontSibling.symbol) {
+                    middlePart = false;
+                    lastPart = true;
+                }
+                expressionMiddleSymbolsIds.push(symbol.drawId);
+            }
+            else if (lastPart) {
+                expressionLastSymbolsIds.push(symbol.drawId);
+            }
+        }
+        console.log(expressionFirstSymbolsIds);
+        console.log(expressionMiddleSymbolsIds);
+        console.log(expressionLastSymbolsIds);
+        let outsideVariableXCoordinates = this.getXCoordinatesFromNode(firstNode.backSibling);
+        let outsideOperatorXCoordinates = this.getXCoordinatesFromNode(firstNode);
+        let openingParenthesesXCoordinates = this.getXCoordinatesFromNode(lastNode.backSibling.backSibling);
+        let insideFirstVariableXCoordinates = this.getXCoordinatesFromNode(lastNode.backSibling);
+        let insideOperatorXCoordinates = this.getXCoordinatesFromNode(lastNode);
+        let insideSecondVariableXCoordinates = this.getXCoordinatesFromNode(lastNode.frontSibling);
+        let closingParenthesesXCoordinates = this.getXCoordinatesFromNode(lastNode.frontSibling.frontSibling);
+        console.log(outsideVariableXCoordinates);
+        console.log(outsideOperatorXCoordinates);
+        console.log(openingParenthesesXCoordinates);
+        console.log(insideFirstVariableXCoordinates);
+        console.log(insideOperatorXCoordinates);
+        console.log(insideSecondVariableXCoordinates);
+        console.log(closingParenthesesXCoordinates);
+
+        const symbolsWithObjects = expressionSymbolsIds.map(drawId => {
+            const associatedObjects = this.drawBuffer
+            .filter(obj => obj.drawId === drawId)
+            .map(({ t, d, c, username, th, tagName, symbol }) => ({ t, d, c, username, th, tagName, symbol }));
+            return { drawId, object: associatedObjects };
+        });
+        
+        
+        let expression = new Expression();
+        
+        for (let id of expressionFirstSymbolsIds) {
+            let content = [];
+            let result = symbolsWithObjects.find(obj => obj.drawId === id);
+            let newSymbol = new Symbol(result.object[0].symbol, this.drawId, result.object[0].tagName);
+            expression.appendSymbol(newSymbol);
+            for (let item of result.object) {
+                let newContent = {};
+                newContent["t"] = item["t"];
+                newContent["d"] = item["d"];
+                newContent["c"] = "black";
+                newContent["username"] = whiteboard.settings.username;
+                newContent["th"] = 3;
+                newContent["tagName"] = item["tagName"];
+                newContent["symbol"] = item["symbol"];
+                content.push(newContent);
+            }
+            this.loadDataInSteps(
+                content,
+                true,
+                function (stepData, index) {
+                    if (index >= content.length - 1) {
+                        //Done with all data
+                        this.drawId++;
+                        //console.log(this.drawId);
+                    }
+                }.bind(this)
+            );
+        }
+            
+        let stroke = symbolsWithObjects.find(obj => obj.drawId === this.getDrawIdsFromNode(lastNode.backSibling.backSibling)[0]);
+        let content = [];
+        let newSymbol = new Symbol(stroke.object[0].symbol, this.drawId, stroke.object[0].tagName);
+        expression.appendSymbol(newSymbol);
+        let vector = outsideVariableXCoordinates.X1 - openingParenthesesXCoordinates.X1;
+        for (let item of stroke.object) {
+            let newContent = {};
+            newContent["t"] = item["t"];
+            newContent["d"] = [item["d"][0] + vector, item["d"][1], item["d"][2] + vector, item["d"][3]];
+            newContent["c"] = "black";
+            newContent["username"] = whiteboard.settings.username;
+            newContent["th"] = 3;
+            newContent["tagName"] = item["tagName"];
+            newContent["symbol"] = item["symbol"];
+            content.push(newContent);
+        }
+        this.loadDataInSteps(
+            content,
+            true,
+            function (stepData, index) {
+                if (index >= content.length - 1) {
+                    //Done with all data
+                    this.drawId++;
+                    //console.log(this.drawId);
+                }
+            }.bind(this)
+        );
+
+        vector = outsideVariableXCoordinates.X1 + insideFirstVariableXCoordinates.X1 - openingParenthesesXCoordinates.X1 - outsideVariableXCoordinates.X1;
+        for (let id of this.getDrawIdsFromNode(firstNode.backSibling)) {
+            stroke = symbolsWithObjects.find(obj => obj.drawId == id);
+            content = [];
+            newSymbol = new Symbol(stroke.object[0].symbol, this.drawId, stroke.object[0].tagName);
+            expression.appendSymbol(newSymbol);
+            for (let item of stroke.object) {
+                let newContent = {};
+                newContent["t"] = item["t"];
+                newContent["d"] = [item["d"][0] + vector, item["d"][1], item["d"][2] + vector, item["d"][3]];
+                newContent["c"] = "black";
+                newContent["username"] = whiteboard.settings.username;
+                newContent["th"] = 3;
+                newContent["tagName"] = item["tagName"];
+                newContent["symbol"] = item["symbol"];
+                content.push(newContent);
+            }
+            this.loadDataInSteps(
+                content,
+                true,
+                function (stepData, index) {
+                    if (index >= content.length - 1) {
+                        //Done with all data
+                        this.drawId++;
+                        //console.log(this.drawId);
+                    }
+                }.bind(this)
+                );
+        }
+
+        vector = outsideVariableXCoordinates.X1 + insideFirstVariableXCoordinates.X1 - openingParenthesesXCoordinates.X1 + outsideOperatorXCoordinates.X1 - outsideVariableXCoordinates.X1 - outsideOperatorXCoordinates.X1;
+        for (let id of this.getDrawIdsFromNode(firstNode)) {
+            stroke = symbolsWithObjects.find(obj => obj.drawId == id);
+            content = [];
+            newSymbol = new Symbol(stroke.object[0].symbol, this.drawId, stroke.object[0].tagName);
+            expression.appendSymbol(newSymbol);
+            for (let item of stroke.object) {
+                let newContent = {};
+                newContent["t"] = item["t"];
+                newContent["d"] = [item["d"][0] + vector, item["d"][1], item["d"][2] + vector, item["d"][3]];
+                newContent["c"] = "black";
+                newContent["username"] = whiteboard.settings.username;
+                newContent["th"] = 3;
+                newContent["tagName"] = item["tagName"];
+                newContent["symbol"] = item["symbol"];
+                content.push(newContent);
+            }
+            this.loadDataInSteps(
+                content,
+                true,
+                function (stepData, index) {
+                    if (index >= content.length - 1) {
+                        //Done with all data
+                        this.drawId++;
+                        //console.log(this.drawId);
+                    }
+                }.bind(this)
+                );
+        }
+        
+        vector = outsideVariableXCoordinates.X1 + insideFirstVariableXCoordinates.X1 - openingParenthesesXCoordinates.X1 + outsideOperatorXCoordinates.X1 - outsideVariableXCoordinates.X1 + openingParenthesesXCoordinates.X1 - outsideOperatorXCoordinates.X1 - insideFirstVariableXCoordinates.X1;
+        for (let id of this.getDrawIdsFromNode(lastNode.backSibling)) {
+            stroke = symbolsWithObjects.find(obj => obj.drawId == id);
+            content = [];
+            newSymbol = new Symbol(stroke.object[0].symbol, this.drawId, stroke.object[0].tagName);
+            expression.appendSymbol(newSymbol);
+            for (let item of stroke.object) {
+                let newContent = {};
+                newContent["t"] = item["t"];
+                newContent["d"] = [item["d"][0] + vector, item["d"][1], item["d"][2] + vector, item["d"][3]];
+                newContent["c"] = "black";
+                newContent["username"] = whiteboard.settings.username;
+                newContent["th"] = 3;
+                newContent["tagName"] = item["tagName"];
+                newContent["symbol"] = item["symbol"];
+                content.push(newContent);
+            }
+            this.loadDataInSteps(
+                content,
+                true,
+                function (stepData, index) {
+                    if (index >= content.length - 1) {
+                        //Done with all data
+                        this.drawId++;
+                        //console.log(this.drawId);
+                    }
+                }.bind(this)
+                );
+        }
+
+        vector = outsideVariableXCoordinates.X1 + insideFirstVariableXCoordinates.X1 - openingParenthesesXCoordinates.X1 + outsideOperatorXCoordinates.X1 - outsideVariableXCoordinates.X1 + openingParenthesesXCoordinates.X1 - outsideOperatorXCoordinates.X1 + insideOperatorXCoordinates.X1 - insideFirstVariableXCoordinates.X1 - closingParenthesesXCoordinates.X1;
+        for (let id of this.getDrawIdsFromNode(lastNode.frontSibling.frontSibling)) {
+            stroke = symbolsWithObjects.find(obj => obj.drawId == id);
+            content = [];
+            newSymbol = new Symbol(stroke.object[0].symbol, this.drawId, stroke.object[0].tagName);
+            expression.appendSymbol(newSymbol);
+            for (let item of stroke.object) {
+                let newContent = {};
+                newContent["t"] = item["t"];
+                newContent["d"] = [item["d"][0] + vector, item["d"][1], item["d"][2] + vector, item["d"][3]];
+                newContent["c"] = "black";
+                newContent["username"] = whiteboard.settings.username;
+                newContent["th"] = 3;
+                newContent["tagName"] = item["tagName"];
+                newContent["symbol"] = item["symbol"];
+                content.push(newContent);
+            }
+            this.loadDataInSteps(
+                content,
+                true,
+                function (stepData, index) {
+                    if (index >= content.length - 1) {
+                        //Done with all data
+                        this.drawId++;
+                        //console.log(this.drawId);
+                    }
+                }.bind(this)
+                );
+        }
+
+        vector = outsideVariableXCoordinates.X1 + insideFirstVariableXCoordinates.X1 - openingParenthesesXCoordinates.X1 + outsideOperatorXCoordinates.X1 - outsideVariableXCoordinates.X1 + openingParenthesesXCoordinates.X1 - outsideOperatorXCoordinates.X1 + insideOperatorXCoordinates.X1 - insideFirstVariableXCoordinates.X1 + closingParenthesesXCoordinates.X2 - closingParenthesesXCoordinates.X1 + insideOperatorXCoordinates.X1 - insideFirstVariableXCoordinates.X2 - insideOperatorXCoordinates.X1;
+        for (let id of this.getDrawIdsFromNode(lastNode)) {
+            stroke = symbolsWithObjects.find(obj => obj.drawId == id);
+            content = [];
+            newSymbol = new Symbol(stroke.object[0].symbol, this.drawId, stroke.object[0].tagName);
+            expression.appendSymbol(newSymbol);
+            for (let item of stroke.object) {
+                let newContent = {};
+                newContent["t"] = item["t"];
+                newContent["d"] = [item["d"][0] + vector, item["d"][1], item["d"][2] + vector, item["d"][3]];
+                newContent["c"] = "black";
+                newContent["username"] = whiteboard.settings.username;
+                newContent["th"] = 3;
+                newContent["tagName"] = item["tagName"];
+                newContent["symbol"] = item["symbol"];
+                content.push(newContent);
+            }
+            this.loadDataInSteps(
+                content,
+                true,
+                function (stepData, index) {
+                    if (index >= content.length - 1) {
+                        //Done with all data
+                        this.drawId++;
+                        //console.log(this.drawId);
+                    }
+                }.bind(this)
+                );
+        }
+
+        vector = outsideVariableXCoordinates.X1 + insideFirstVariableXCoordinates.X1 - openingParenthesesXCoordinates.X1 + outsideOperatorXCoordinates.X1 - outsideVariableXCoordinates.X1 + openingParenthesesXCoordinates.X1 - outsideOperatorXCoordinates.X1 + insideOperatorXCoordinates.X1 - insideFirstVariableXCoordinates.X1 + closingParenthesesXCoordinates.X2 - closingParenthesesXCoordinates.X1 + insideOperatorXCoordinates.X1 - insideFirstVariableXCoordinates.X2 + insideSecondVariableXCoordinates.X1 - insideOperatorXCoordinates.X1 - openingParenthesesXCoordinates.X1;
+        for (let id of this.getDrawIdsFromNode(lastNode.backSibling.backSibling)) {
+            stroke = symbolsWithObjects.find(obj => obj.drawId == id);
+            content = [];
+            newSymbol = new Symbol(stroke.object[0].symbol, this.drawId, stroke.object[0].tagName);
+            expression.appendSymbol(newSymbol);
+            for (let item of stroke.object) {
+                let newContent = {};
+                newContent["t"] = item["t"];
+                newContent["d"] = [item["d"][0] + vector, item["d"][1], item["d"][2] + vector, item["d"][3]];
+                newContent["c"] = "black";
+                newContent["username"] = whiteboard.settings.username;
+                newContent["th"] = 3;
+                newContent["tagName"] = item["tagName"];
+                newContent["symbol"] = item["symbol"];
+                content.push(newContent);
+            }
+            this.loadDataInSteps(
+                content,
+                true,
+                function (stepData, index) {
+                    if (index >= content.length - 1) {
+                        //Done with all data
+                        this.drawId++;
+                        //console.log(this.drawId);
+                    }
+                }.bind(this)
+                );
+        }
+
+        vector = outsideVariableXCoordinates.X1 + insideFirstVariableXCoordinates.X1 - openingParenthesesXCoordinates.X1 + outsideOperatorXCoordinates.X1 - outsideVariableXCoordinates.X1 + openingParenthesesXCoordinates.X1 - outsideOperatorXCoordinates.X1 + insideOperatorXCoordinates.X1 - insideFirstVariableXCoordinates.X1 + closingParenthesesXCoordinates.X2 - closingParenthesesXCoordinates.X1 + insideOperatorXCoordinates.X1 - insideFirstVariableXCoordinates.X2 + insideSecondVariableXCoordinates.X1 - insideOperatorXCoordinates.X1 + insideFirstVariableXCoordinates.X1 - openingParenthesesXCoordinates.X1 - outsideVariableXCoordinates.X1;
+        for (let id of this.getDrawIdsFromNode(firstNode.backSibling)) {
+            stroke = symbolsWithObjects.find(obj => obj.drawId == id);
+            content = [];
+            newSymbol = new Symbol(stroke.object[0].symbol, this.drawId, stroke.object[0].tagName);
+            expression.appendSymbol(newSymbol);
+            for (let item of stroke.object) {
+                let newContent = {};
+                newContent["t"] = item["t"];
+                newContent["d"] = [item["d"][0] + vector, item["d"][1], item["d"][2] + vector, item["d"][3]];
+                newContent["c"] = "black";
+                newContent["username"] = whiteboard.settings.username;
+                newContent["th"] = 3;
+                newContent["tagName"] = item["tagName"];
+                newContent["symbol"] = item["symbol"];
+                content.push(newContent);
+            }
+            this.loadDataInSteps(
+                content,
+                true,
+                function (stepData, index) {
+                    if (index >= content.length - 1) {
+                        //Done with all data
+                        this.drawId++;
+                        //console.log(this.drawId);
+                    }
+                }.bind(this)
+                );
+        }
+
+        vector = outsideVariableXCoordinates.X1 + insideFirstVariableXCoordinates.X1 - openingParenthesesXCoordinates.X1 + outsideOperatorXCoordinates.X1 - outsideVariableXCoordinates.X1 + openingParenthesesXCoordinates.X1 - outsideOperatorXCoordinates.X1 + insideOperatorXCoordinates.X1 - insideFirstVariableXCoordinates.X1 + closingParenthesesXCoordinates.X2 - closingParenthesesXCoordinates.X1 + insideOperatorXCoordinates.X1 - insideFirstVariableXCoordinates.X2 + insideSecondVariableXCoordinates.X1 - insideOperatorXCoordinates.X1 + insideFirstVariableXCoordinates.X1 - openingParenthesesXCoordinates.X1 + outsideOperatorXCoordinates.X1 - outsideVariableXCoordinates.X1 - outsideOperatorXCoordinates.X1;
+        for (let id of this.getDrawIdsFromNode(firstNode)) {
+            stroke = symbolsWithObjects.find(obj => obj.drawId == id);
+            content = [];
+            newSymbol = new Symbol(stroke.object[0].symbol, this.drawId, stroke.object[0].tagName);
+            expression.appendSymbol(newSymbol);
+            for (let item of stroke.object) {
+                let newContent = {};
+                newContent["t"] = item["t"];
+                newContent["d"] = [item["d"][0] + vector, item["d"][1], item["d"][2] + vector, item["d"][3]];
+                newContent["c"] = "black";
+                newContent["username"] = whiteboard.settings.username;
+                newContent["th"] = 3;
+                newContent["tagName"] = item["tagName"];
+                newContent["symbol"] = item["symbol"];
+                content.push(newContent);
+            }
+            this.loadDataInSteps(
+                content,
+                true,
+                function (stepData, index) {
+                    if (index >= content.length - 1) {
+                        //Done with all data
+                        this.drawId++;
+                        //console.log(this.drawId);
+                    }
+                }.bind(this)
+                );
+        }
+
+        vector = outsideVariableXCoordinates.X1 + insideFirstVariableXCoordinates.X1 - openingParenthesesXCoordinates.X1 + outsideOperatorXCoordinates.X1 - outsideVariableXCoordinates.X1 + openingParenthesesXCoordinates.X1 - outsideOperatorXCoordinates.X1 + insideOperatorXCoordinates.X1 - insideFirstVariableXCoordinates.X1 + closingParenthesesXCoordinates.X2 - closingParenthesesXCoordinates.X1 + insideOperatorXCoordinates.X1 - insideFirstVariableXCoordinates.X2 + insideSecondVariableXCoordinates.X1 - insideOperatorXCoordinates.X1 + insideFirstVariableXCoordinates.X1 - openingParenthesesXCoordinates.X1 + outsideOperatorXCoordinates.X1 - outsideVariableXCoordinates.X1 + openingParenthesesXCoordinates.X1 - outsideOperatorXCoordinates.X1 - insideSecondVariableXCoordinates.X1;
+        for (let id of this.getDrawIdsFromNode(lastNode.frontSibling)) {
+            stroke = symbolsWithObjects.find(obj => obj.drawId == id);
+            content = [];
+            newSymbol = new Symbol(stroke.object[0].symbol, this.drawId, stroke.object[0].tagName);
+            expression.appendSymbol(newSymbol);
+            for (let item of stroke.object) {
+                let newContent = {};
+                newContent["t"] = item["t"];
+                newContent["d"] = [item["d"][0] + vector, item["d"][1], item["d"][2] + vector, item["d"][3]];
+                newContent["c"] = "black";
+                newContent["username"] = whiteboard.settings.username;
+                newContent["th"] = 3;
+                newContent["tagName"] = item["tagName"];
+                newContent["symbol"] = item["symbol"];
+                content.push(newContent);
+            }
+            this.loadDataInSteps(
+                content,
+                true,
+                function (stepData, index) {
+                    if (index >= content.length - 1) {
+                        //Done with all data
+                        this.drawId++;
+                        //console.log(this.drawId);
+                    }
+                }.bind(this)
+                );
+        }
+
+        vector = outsideVariableXCoordinates.X1 + insideFirstVariableXCoordinates.X1 - openingParenthesesXCoordinates.X1 + outsideOperatorXCoordinates.X1 - outsideVariableXCoordinates.X1 + openingParenthesesXCoordinates.X1 - outsideOperatorXCoordinates.X1 + insideOperatorXCoordinates.X1 - insideFirstVariableXCoordinates.X1 + closingParenthesesXCoordinates.X2 - closingParenthesesXCoordinates.X1 + insideOperatorXCoordinates.X1 - insideFirstVariableXCoordinates.X2 + insideSecondVariableXCoordinates.X1 - insideOperatorXCoordinates.X1 + insideFirstVariableXCoordinates.X1 - openingParenthesesXCoordinates.X1 + outsideOperatorXCoordinates.X1 - outsideVariableXCoordinates.X1 + openingParenthesesXCoordinates.X1 - outsideOperatorXCoordinates.X1 + closingParenthesesXCoordinates.X1 - insideSecondVariableXCoordinates.X1 - closingParenthesesXCoordinates.X1;
+        for (let id of this.getDrawIdsFromNode(lastNode.frontSibling.frontSibling)) {
+            stroke = symbolsWithObjects.find(obj => obj.drawId == id);
+            content = [];
+            newSymbol = new Symbol(stroke.object[0].symbol, this.drawId, stroke.object[0].tagName);
+            expression.appendSymbol(newSymbol);
+            for (let item of stroke.object) {
+                let newContent = {};
+                newContent["t"] = item["t"];
+                newContent["d"] = [item["d"][0] + vector, item["d"][1], item["d"][2] + vector, item["d"][3]];
+                newContent["c"] = "black";
+                newContent["username"] = whiteboard.settings.username;
+                newContent["th"] = 3;
+                newContent["tagName"] = item["tagName"];
+                newContent["symbol"] = item["symbol"];
+                content.push(newContent);
+            }
+            this.loadDataInSteps(
+                content,
+                true,
+                function (stepData, index) {
+                    if (index >= content.length - 1) {
+                        //Done with all data
+                        this.drawId++;
+                        //console.log(this.drawId);
+                    }
+                }.bind(this)
+                );
+        }
+
+        vector = outsideVariableXCoordinates.X1 + insideFirstVariableXCoordinates.X1 - openingParenthesesXCoordinates.X1 + outsideOperatorXCoordinates.X1 - outsideVariableXCoordinates.X1 + openingParenthesesXCoordinates.X1 - outsideOperatorXCoordinates.X1 + insideOperatorXCoordinates.X1 - insideFirstVariableXCoordinates.X1 + closingParenthesesXCoordinates.X2 - closingParenthesesXCoordinates.X1 + insideOperatorXCoordinates.X1 - insideFirstVariableXCoordinates.X2 + insideSecondVariableXCoordinates.X1 - insideOperatorXCoordinates.X1 + insideFirstVariableXCoordinates.X1 - openingParenthesesXCoordinates.X1 + outsideOperatorXCoordinates.X1 - outsideVariableXCoordinates.X1 + openingParenthesesXCoordinates.X1 - outsideOperatorXCoordinates.X1 + closingParenthesesXCoordinates.X1 - insideSecondVariableXCoordinates.X1 - closingParenthesesXCoordinates.X1;
+        for (let id of expressionLastSymbolsIds) {
+            let content = [];
+            let result = symbolsWithObjects.find(obj => obj.drawId === id);
+            let newSymbol = new Symbol(result.object[0].symbol, this.drawId, result.object[0].tagName);
+            expression.appendSymbol(newSymbol);
+            for (let item of result.object) {
+                let newContent = {};
+                newContent["t"] = item["t"];
+                newContent["d"] = [item["d"][0] + vector, item["d"][1], item["d"][2] + vector, item["d"][3]];
+                newContent["c"] = "black";
+                newContent["username"] = whiteboard.settings.username;
+                newContent["th"] = 3;
+                newContent["tagName"] = item["tagName"];
+                newContent["symbol"] = item["symbol"];
+                content.push(newContent);
+            }
+            this.loadDataInSteps(
+                content,
+                true,
+                function (stepData, index) {
+                    if (index >= content.length - 1) {
+                        //Done with all data
+                        this.drawId++;
+                        //console.log(this.drawId);
+                    }
+                }.bind(this)
+            );
+        }
+        
+        for (let i = 0; i < this.drawBuffer.length; i++) {
+            let item = this.drawBuffer[i];
+            if (expressionSymbolsIds.includes(item.drawId)) {
+                this.drawBuffer.splice(i, 1);
+                i--;
+            }
+        }
+
+        console.log(expression.symbols);
+        let node = buildTree(expression.symbols);
+        expression.setRootNode(buildParsedTree(node, new RoseTreeNode(true)));
+
+        whiteboard.expressions.push(expression);
+        console.log(expression);
+        
+        whiteboard.canvas.height = whiteboard.canvas.height;
+        whiteboard.imgContainer.empty();
+        whiteboard.loadDataInSteps(whiteboard.drawBuffer, false, function (stepData) {
+            //Nothing to do
+        });
+        
+        // for (let list of listedFilteredDrawBuffer) {
+            //     let content = [];
+        //     let newSymbol = new Symbol(list[0]["symbol"], this.drawId, list[0]["tagName"]);
+        //     expression.appendSymbol(newSymbol);
+        //     for (let item of list) {
+        //         let newContent = {};
+        //         let newCoordinates = [item["d"][0] + vector.X, item["d"][1] + vector.Y, item["d"][2] + vector.X, item["d"][3] + vector.Y];
+        //         newContent["t"] = item["t"];
+        //         newContent["d"] = newCoordinates;
+        //         newContent["c"] = "black";
+        //         newContent["username"] = whiteboard.settings.username;
+        //         newContent["th"] = 3;
+        //         newContent["tagName"] = item["tagName"];
+        //         newContent["symbol"] = item["symbol"];
+        //         content.push(newContent);
+        //     }
+        //     this.loadDataInSteps(
+        //         content,
+        //         true,
+        //         function (stepData, index) {
+        //             if (index >= content.length - 1) {
+        //                 //Done with all data
+        //                 this.drawId++;
+        //                 //console.log(this.drawId);
+        //             }
+        //         }.bind(this)
+        //     );
+        // }
+
+        // let distributed
+        // for (let item of this.drawBuffer) {
+        //     if (expressionFirstSymbolsIds.includes(item["drawId"])) {
+
+        //     }
+        //     else if (expressionMiddleSymbolsIds.includes(item["drawId"])) {
+
+        //     }
+        //     else if (expressionLastSymbolsIds.includes(item["drawId"])) {
+
+        //     }
+        // }
+
     },
     loadWhiteboard: function (whiteboardContainer, newSettings) {
         const svgns = "http://www.w3.org/2000/svg";
@@ -586,20 +1114,65 @@ const whiteboard = {
 
         function endGesture() {
             if (this.gesturePath.length > 1) {
-                console.log(this.gesturePath);
-                let gesture = new DollarRecognizer().Recognize(this.gesturePath, true).Name;
-                console.log(gesture);
-                let gestureCoordinates = this.getGestureCoordinates(this.gesturePath);
-                if (gesture == "v" || gesture == "check") {
-                    console.log("v or check");
-                    this.copySelection(gestureCoordinates);
-                    //console.log(this.gesturePath);
-                    //do something
+                
+                let firstDrawId = undefined;
+                let lastDrawId = undefined;
+                for (let item of this.drawBuffer) {
+                    if (
+                        (item.d[0] - 4 <= this.gesturePath[0].X &&
+                            item.d[0] + 4 >= this.gesturePath[0].X &&
+                            item.d[1] - 4 <= this.gesturePath[0].Y &&
+                            item.d[1] + 4 >= this.gesturePath[0].Y) ||
+                        (item.d[2] - 4 <= this.gesturePath[0].X &&
+                            item.d[2] + 4 >= this.gesturePath[0].X &&
+                            item.d[3] - 4 <= this.gesturePath[0].Y &&
+                            item.d[3] + 4 >= this.gesturePath[0].Y)
+                    ) {
+                        firstDrawId = item.drawId;
+                        break;
+                    }
                 }
-                if (gesture == "circle") {
-                    console.log("circle");
-                    this.swapOperator(gestureCoordinates);
+                for (let item of this.drawBuffer) {
+                    if (
+                        (item.d[0] - 4 <= event.clientX &&
+                            item.d[0] + 4 >= event.clientX &&
+                            item.d[1] - 4 <= event.clientY &&
+                            item.d[1] + 4 >= event.clientY) ||
+                        (item.d[2] - 4 <= event.clientX &&
+                            item.d[2] + 4 >= event.clientX &&
+                            item.d[3] - 4 <= event.clientY &&
+                            item.d[3] + 4 >= event.clientY)
+                    ) {
+                        lastDrawId = item.drawId;
+                        break;
+                    }
                 }
+                
+                if (firstDrawId !== undefined && lastDrawId !== undefined) {
+                    let firstNode = this.getNodeFromDrawId(firstDrawId, this.getExpressionFromDrawId(firstDrawId).rootNode);
+                    let lastNode = this.getNodeFromDrawId(lastDrawId, this.getExpressionFromDrawId(lastDrawId).rootNode);
+                    if (this.getParentFromNode(lastNode) === firstNode.frontSibling && this.canBeDistributed(this.getParentFromNode(lastNode))) {
+                        //distribuir
+                        this.distribute(firstNode, lastNode); //<-- fazer esta função (tenho que ter em atenção as coordenadas estilo swap)
+                    }
+                }
+                else {
+                    console.log(this.gesturePath);
+                    let gesture = new DollarRecognizer().Recognize(this.gesturePath, true).Name;
+                    console.log(gesture);
+                    let gestureCoordinates = this.getGestureCoordinates(this.gesturePath);
+                    if (gesture == "v" || gesture == "check") {
+                        console.log("v or check");
+                        this.copySelection(gestureCoordinates);
+                        //console.log(this.gesturePath);
+                        //do something
+                    }
+                    if (gesture == "circle") {
+                        console.log("circle");
+                        this.swapOperator(gestureCoordinates);
+                    }
+                }
+
             }
             
             // Clear the gesture path for the next gesture
@@ -685,6 +1258,9 @@ const whiteboard = {
                                 if (symbol.drawId === item.drawId) {
                                     if (symbol.drawId === this.pressedSymbol.drawId) {
                                         this.pressedSymbol.amountPressed++;
+                                        console.log("Before");
+                                        console.log(this.pressedSymbol.drawId);
+                                        console.log(this.getExpressionFromDrawId(this.pressedSymbol.drawId).rootNode);
                                         this.selectedSymbols = this.expandSelection(
                                             this.getNodeFromDrawId(
                                                 this.pressedSymbol.drawId,
@@ -696,6 +1272,9 @@ const whiteboard = {
                                     } else {
                                         this.pressedSymbol.drawId = item.drawId;
                                         this.pressedSymbol.amountPressed = 2;
+                                        console.log("Before");
+                                        console.log(this.pressedSymbol.drawId);
+                                        console.log(this.getExpressionFromDrawId(this.pressedSymbol.drawId).rootNode);
                                         this.selectedSymbols = this.expandSelection(
                                             this.getNodeFromDrawId(
                                                 this.pressedSymbol.drawId,

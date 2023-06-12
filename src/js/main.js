@@ -20,6 +20,7 @@ export class Symbol {
         this.symbol = symbol;
         this.drawId = drawId;
         this.tagName = tagName;
+        this.parent = undefined;
     }
 }
 
@@ -78,73 +79,194 @@ function checkOperator(symbol) {
     if (symbol.symbol == "=") return 1;
     if (symbol.symbol == "+" || symbol.symbol == "-") return 2;
     if (symbol.symbol == "*") return 3;
+    if (symbol.symbol == "(") return 9999;
 }
 
-function getRootNode(node) {
-    if (node.parent === undefined) {
-        return node;
-    }
-    return getRootNode(node.parent);
-}
+// function removeUndefined(node) {
+//     let i = node.children.length;
+//     while (i--) {
+//         if (node.children[i] instanceof Node) {
+//             node.children[i] = removeUndefined(node.children[i]);
+//         }
+//         else if (node.children[i] === undefined) {
+//             node.children.splice(i, 1);
+//         }
+//     }
+//     console.log(node);
+//     return node;
+// }
 
-function removeUndefined(node) {
-    let i = node.children.length;
-    while (i--) {
-        if (node.children[i] instanceof Node) {
-            node.children[i] = removeUndefined(node.children[i]);
+function getClosingParenthesesIndex(openingParanthesesIndex, array) {
+    let openingParenthesesCount = 1;
+    for (let i = openingParanthesesIndex + 1; i < array.length; i++) {
+        if (array[i].symbol === '(') {
+            openingParenthesesCount++;
         }
-        else if (node.children[i] === undefined) {
-            node.children.splice(i, 1);
+        if (array[i].symbol == ')') {
+            openingParenthesesCount--;
         }
-    }
-    console.log(node);
-    return node;
-}
-
-export function buildTree(expression, targetPrecedence = 0) {
-    let node = new Node();
-    node.addChild(expression[0]);
-    let remainingString = buildNode(
-        expression.slice(1),
-        node,
-        checkOperator(expression[1]),
-        targetPrecedence
-    );
-    return [removeUndefined(getRootNode(node)), remainingString];
-}
-
-function buildNode(expression, node, precedence, targetPrecedence) {
-    if (expression === [] || expression === undefined) return;
-
-    node.addChild(expression[0]);
-
-    if (expression[2] === undefined) {
-        node.addChild(expression[1]);
-        return "";
-    } else {
-        if (checkOperator(expression[2]) <= targetPrecedence) {
-            node.addChild(expression[1]);
-            return expression.slice(2);
+        if (openingParenthesesCount === 0) {
+            return i;
         }
     }
-    if (checkOperator(expression[2]) == precedence) {
-        node.addChild(expression[1]);
-        buildNode(expression.slice(2), node, precedence, targetPrecedence);
+    return undefined;
+}
+
+function orderByPrecedenceDescending(array) {
+    let operatorArray = [];
+    for (let i = 0; i < array.length; i++) {
+        if (checkOperator(array[i]) != undefined) {
+            operatorArray.push(array[i]);
+            if (array[i].symbol === '(') {
+                let closingParenthesesIndex = getClosingParenthesesIndex(i, array);
+                if (closingParenthesesIndex !== undefined) {
+                    i = closingParenthesesIndex;
+                }
+            }
+        }
     }
-    if (checkOperator(expression[2]) > precedence) {
-        let [newNode, remainingString] = buildTree(expression.slice(1), precedence);
-        node.addChild(newNode);
-        newNode.addParent(node);
-        buildNode(remainingString, node, checkOperator(expression[0]), targetPrecedence);
+    
+    operatorArray.sort((a, b) => {
+        if (checkOperator(a) > checkOperator(b)) {
+            return -1;
+        } else if (checkOperator(a) < checkOperator(b)) {
+            return 1;
+        } else {
+            return operatorArray.indexOf(a) - operatorArray.indexOf(b);
+        }
+    });
+    
+    return operatorArray;
+}
+
+function getRootNode(symbol) {
+    if (symbol.parent === undefined) {
+        return symbol;
     }
-    if (checkOperator(expression[2]) < precedence) {
-        node.addChild(expression[1]);
-        let newNode = new Node();
-        newNode.addChild(node);
-        node.addParent(newNode);
-        buildNode(expression.slice(2), newNode, checkOperator(expression[2]), targetPrecedence);
+    return getRootNode(symbol.parent);
+}
+
+function clearSymbolsParents(symbols) {
+    for (let symbol of symbols) {
+        symbol.parent = undefined;
     }
 }
+
+function checkPrecedence(node) {
+    for (let child of node.children) {
+        if (checkOperator(child) !== undefined) {
+            return checkOperator(child);
+        }
+    }
+}
+
+export function buildTree(expression) {
+    clearSymbolsParents(expression);
+    let operatorArray = orderByPrecedenceDescending(expression);
+    for (let operator of operatorArray) {
+        let operatorSymbol = expression[expression.indexOf(operator)];
+        let leftSymbol = expression[expression.indexOf(operator) - 1];
+        let rightSymbol = expression[expression.indexOf(operator) + 1];
+        
+        if (operatorSymbol.symbol === '(') {
+            let openingParenthesesIndex = expression.indexOf(operator);
+            let closingParenthesesIndex = getClosingParenthesesIndex(openingParenthesesIndex, expression);
+            let newNode = buildTree(expression.slice(openingParenthesesIndex + 1, closingParenthesesIndex));
+            newNode.children.unshift(operatorSymbol);
+            newNode.addChild(expression[closingParenthesesIndex]);
+            operatorSymbol.parent = newNode;
+            expression[closingParenthesesIndex].parent = newNode;
+        }
+        else {
+            if (leftSymbol.parent === undefined && rightSymbol.parent === undefined) {
+                let newNode = new Node();
+                newNode.addChild(leftSymbol);
+                newNode.addChild(operatorSymbol);
+                newNode.addChild(rightSymbol);
+                leftSymbol.parent = newNode;
+                operatorSymbol.parent = newNode;
+                rightSymbol.parent = newNode;
+            }
+            else if (leftSymbol.parent !== undefined && rightSymbol.parent !== undefined) {
+                if (checkPrecedence(getRootNode(leftSymbol)) === checkOperator(operator)) {
+                    getRootNode(leftSymbol).addChild(operatorSymbol);
+                    getRootNode(leftSymbol).addChild(getRootNode(rightSymbol));
+                    operatorSymbol.parent = getRootNode(leftSymbol);
+                    getRootNode(rightSymbol).parent = getRootNode(leftSymbol);
+                }
+                else {
+                    let newNode = new Node();
+                    newNode.addChild(getRootNode(leftSymbol));
+                    newNode.addChild(operatorSymbol);
+                    newNode.addChild(getRootNode(rightSymbol));
+                    getRootNode(leftSymbol).parent = newNode;
+                    operatorSymbol.parent = newNode;
+                    getRootNode(rightSymbol).parent = newNode;
+                }
+            }
+            else if (leftSymbol.parent === undefined && rightSymbol.parent !== undefined) {
+                let newNode = new Node();
+                newNode.addChild(leftSymbol);
+                newNode.addChild(operatorSymbol);
+                newNode.addChild(getRootNode(rightSymbol));
+                leftSymbol.parent = newNode;
+                operatorSymbol.parent = newNode;
+                getRootNode(rightSymbol).parent = newNode;
+            }
+            else if (leftSymbol.parent !== undefined && rightSymbol.parent === undefined) {
+                if (checkPrecedence(getRootNode(leftSymbol)) === checkOperator(operator)) {
+                    getRootNode(leftSymbol).addChild(operatorSymbol);
+                    getRootNode(leftSymbol).addChild(rightSymbol);
+                    operatorSymbol.parent = getRootNode(leftSymbol);
+                    rightSymbol.parent = getRootNode(leftSymbol);
+                }
+                else {
+                    let newNode = new Node();
+                    newNode.addChild(getRootNode(leftSymbol));
+                    newNode.addChild(operatorSymbol);
+                    newNode.addChild(rightSymbol);
+                    getRootNode(leftSymbol).parent = newNode;
+                    operatorSymbol.parent = newNode;
+                    rightSymbol.parent = newNode;
+                }
+            }
+        }
+    }
+    return getRootNode(expression[0]);
+}
+
+// function buildNode(expression, node, precedence, targetPrecedence) {
+//     if (expression === [] || expression === undefined) return;
+
+//     node.addChild(expression[0]);
+
+//     if (expression[2] === undefined) {
+//         node.addChild(expression[1]);
+//         return "";
+//     } else {
+//         if (checkOperator(expression[2]) <= targetPrecedence) {
+//             node.addChild(expression[1]);
+//             return expression.slice(2);
+//         }
+//     }
+//     if (checkOperator(expression[2]) == precedence) {
+//         node.addChild(expression[1]);
+//         buildNode(expression.slice(2), node, precedence, targetPrecedence);
+//     }
+//     if (checkOperator(expression[2]) > precedence) {
+//         let [newNode, remainingString] = buildTree(expression.slice(1), precedence);
+//         node.addChild(newNode);
+//         newNode.addParent(node);
+//         buildNode(remainingString, node, checkOperator(expression[0]), targetPrecedence);
+//     }
+//     if (checkOperator(expression[2]) < precedence) {
+//         node.addChild(expression[1]);
+//         let newNode = new Node();
+//         newNode.addChild(node);
+//         node.addParent(newNode);
+//         buildNode(expression.slice(2), newNode, checkOperator(expression[2]), targetPrecedence);
+//     }
+// }
 
 export function buildParsedTree(rootNode, roseTreeRootNode) {
     let previousChild = undefined;
@@ -833,20 +955,33 @@ function initWhiteboard() {
             return result;
         }
 
+        function getSymbolFromId(mathml, id) {
+            for (let child of mathml.children) {
+                if ((child.tagName == "mi" || child.tagName == "mo" || child.tagName == "mn") && child.getAttribute("xml:id") === id) {
+                    return child.innerHTML;
+                } else if (child.tagName == "mrow") {
+                    let result = getSymbolFromId(child, id);
+                    if (result !== undefined) {
+                        return result;
+                    }
+                }
+            }
+        }
+
         $("#myFileInkml").on("change", function () {
             var file = document.getElementById("myFileInkml").files[0];
             var reader = new FileReader();
 
             reader.onload = function (e) {
-                try {
-                    // let expression = new Expression();
-                    // // expression.appendSymbol(new Symbol("a", 0, 'mi'));
-                    // // expression.appendSymbol(new Symbol("*", 1, 'mo'));
-                    // // expression.appendSymbol(new Symbol("b", 2, 'mi'));
-                    // // expression.appendSymbol(new Symbol("+", 3, 'mo'));
-                    // // expression.appendSymbol(new Symbol("c", 4, 'mi'));
-                    // // expression.appendSymbol(new Symbol("+", 5, 'mo'));
-                    // // expression.appendSymbol(new Symbol("d", 6, 'mi'));
+                //try {
+                    // let expression123 = new Expression();
+                    // expression123.appendSymbol(new Symbol("a", 0, 'mi'));
+                    // expression123.appendSymbol(new Symbol("+", 1, 'mo'));
+                    // expression123.appendSymbol(new Symbol("b", 2, 'mi'));
+                    // expression123.appendSymbol(new Symbol("*", 3, 'mo'));
+                    // expression123.appendSymbol(new Symbol("c", 4, 'mi'));
+                    // expression123.appendSymbol(new Symbol("=", 5, 'mo'));
+                    // expression123.appendSymbol(new Symbol("d", 6, 'mi'));
                     // // expression.appendSymbol(new Symbol("*", 7, 'mo'));
                     // // expression.appendSymbol(new Symbol("e", 8, 'mi'));
                     // // expression.appendSymbol(new Symbol("+", 9, 'mo'));
@@ -860,8 +995,11 @@ function initWhiteboard() {
                     // expression.appendSymbol(new Symbol("=", 3, 'mo'));
                     // expression.appendSymbol(new Symbol("c", 4, 'mi'));
 
-                    // let [node, remainingString] = buildTree(expression.symbols);
-                    // expression.setRootNode(buildParsedTree(node, new RoseTreeNode(true)));
+                    // let node123 = buildTree(expression123.symbols);
+                    // expression123.setRootNode(buildParsedTree(node123, new RoseTreeNode(true)));
+
+                    // console.log("ZAAAAAA");
+                    // console.log(expression123);
 
                     // whiteboard.expression = expression;
                     // //console.log(whiteboard.expression);
@@ -872,7 +1010,7 @@ function initWhiteboard() {
                     let xmlDoc = parser.parseFromString(e.target.result, "text/xml");
                     const traces = xmlDoc.getElementsByTagName("trace");
                     let traceGroups = xmlDoc.getElementsByTagName("traceGroup");
-                    traceGroups = traceGroups[0].getElementsByTagName("traceGroup");
+                    //traceGroups = traceGroups[0].getElementsByTagName("traceGroup");
                     let minX = 999999;
                     let maxX = -999999;
                     let minY = 999999;
@@ -898,18 +1036,18 @@ function initWhiteboard() {
                     const scaleY = originalHeight / 600;
                     //console.log(xmlDoc.getElementsByTagName("mrow")[0]);
                     let ids = parseMathml(xmlDoc.getElementsByTagName("mrow")[0]);
+                    console.log("IDSSSSSSSSSS");
+                    console.log(ids);
+                    console.log(traceGroups);
 
                     for (let id of ids) {
                         for (let traceGroup of traceGroups) {
-                            if (
-                                id[0] ==
-                                traceGroup
-                                    .getElementsByTagName("annotationXML")[0]
-                                    .getAttribute("href")
-                            ) {
+                            let annotationXML = traceGroup.getElementsByTagName("annotationXML")[0];
+                            let annotation = traceGroup.getElementsByTagName("annotation")[0];
+                            if (((annotationXML && annotationXML.parentNode === traceGroup && id[0] == annotationXML.getAttribute("href")) || (annotation && annotation.parentNode === traceGroup && id[0] == annotation.textContent))) {
                                 let content = [];
                                 let newSymbol = new Symbol(
-                                    traceGroup.getElementsByTagName("annotation")[0].innerHTML,
+                                    getSymbolFromId(xmlDoc.querySelector('mrow'), id[0]),
                                     whiteboard.drawId,
                                     id[1]
                                 );
@@ -938,7 +1076,7 @@ function initWhiteboard() {
                                                     whiteboard.settings.username;
                                                 newContent["th"] = 3;
                                                 newContent["tagName"] = id[1];
-                                                newContent["symbol"] = traceGroup.getElementsByTagName("annotation")[0].innerHTML;
+                                                newContent["symbol"] = getSymbolFromId(xmlDoc.querySelector('mrow'), id[0]);
                                                 //console.log(traceGroup);
                                                 content.push(newContent);
                                             }
@@ -959,7 +1097,11 @@ function initWhiteboard() {
                         }
                     }
 
-                    let [node, remainingString] = buildTree(expression.symbols);
+                    console.log("SYMBOLSS");
+                    console.log(expression.symbols);
+                    let node = buildTree(expression.symbols);
+                    console.log("NODE");
+                    console.log(node);
                     expression.setRootNode(buildParsedTree(node, new RoseTreeNode(true)));
 
                     whiteboard.expressions.push(expression);
@@ -1029,9 +1171,9 @@ function initWhiteboard() {
                     //     });
                     // }
                     //});
-                } catch (e) {
-                    showBasicAlert("File was not a valid Inkml!");
-                }
+                // } catch (e) {
+                //     showBasicAlert("File was not a valid Inkml!");
+                // }
             };
             reader.readAsText(file);
             whiteboard.canvas.height = whiteboard.canvas.height;
