@@ -1319,7 +1319,8 @@ const whiteboard = {
                     currentPos.y,
                 ];
             } else if (_this.tool === "structurer") {
-                console.log(currentPos.x);
+                console.log("X:", currentPos.x);
+                console.log("Y:", currentPos.y);
                 for (let selected of this.selectedSymbols) {
                     for (let item of this.drawBuffer) {
                         if (item.drawId === selected.drawId) {

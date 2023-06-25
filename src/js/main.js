@@ -1034,7 +1034,16 @@ function initWhiteboard() {
                     const originalHeight = meanY * 2;
                     const scaleX = originalWidth / 1600;
                     const scaleY = originalHeight / 600;
-                    //console.log(xmlDoc.getElementsByTagName("mrow")[0]);
+                    //////////
+                    let currentWidth = maxX - minX;
+                    let currentHeight = maxY - minY;
+                    let aspectRatio = currentWidth / currentHeight;
+                    let desiredWidth = 500;
+                    let desiredHeight = desiredWidth / aspectRatio; 
+                    //////////
+                    console.log("maxX: ");
+                    console.log(maxX);
+                    console.log(xmlDoc.getElementsByTagName("mrow")[0]);
                     let ids = parseMathml(xmlDoc.getElementsByTagName("mrow")[0]);
                     console.log("IDSSSSSSSSSS");
                     console.log(ids);
@@ -1064,10 +1073,18 @@ function initWhiteboard() {
                                                 .split(",")
                                                 .map((p) => p.trim().split(" ").map(parseFloat));
                                             for (let i = 1; i < points.length; i++) {
-                                                const x1 = points[i - 1][0] / scaleX;
-                                                const y1 = points[i - 1][1] / scaleY;
-                                                const newX1 = points[i][0] / scaleX;
-                                                const newY1 = points[i][1] / scaleY;
+                                                // const x1 = points[i - 1][0] / scaleX;
+                                                // const y1 = points[i - 1][1] / scaleY;
+                                                // const newX1 = points[i][0] / scaleX;
+                                                // const newY1 = points[i][1] / scaleY;
+                                                // const x1 = points[i - 1][0];
+                                                // const y1 = points[i - 1][1];
+                                                // const newX1 = points[i][0];
+                                                // const newY1 = points[i][1];
+                                                const x1 = (points[i - 1][0] / currentWidth) * desiredWidth + 200;
+                                                const y1 = (points[i - 1][1] / currentHeight) * desiredHeight + 200;
+                                                const newX1 = (points[i][0] / currentWidth) * desiredWidth + 200;
+                                                const newY1 = (points[i][1] / currentHeight) * desiredHeight + 200;
                                                 let newContent = {};
                                                 newContent["t"] = "pen";
                                                 newContent["d"] = [x1, y1, newX1, newY1];
