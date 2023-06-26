@@ -82,20 +82,6 @@ function checkOperator(symbol) {
     if (symbol.symbol == "(") return 9999;
 }
 
-// function removeUndefined(node) {
-//     let i = node.children.length;
-//     while (i--) {
-//         if (node.children[i] instanceof Node) {
-//             node.children[i] = removeUndefined(node.children[i]);
-//         }
-//         else if (node.children[i] === undefined) {
-//             node.children.splice(i, 1);
-//         }
-//     }
-//     console.log(node);
-//     return node;
-// }
-
 function getClosingParenthesesIndex(openingParanthesesIndex, array) {
     let openingParenthesesCount = 1;
     for (let i = openingParanthesesIndex + 1; i < array.length; i++) {
@@ -234,39 +220,6 @@ export function buildTree(expression) {
     }
     return getRootNode(expression[0]);
 }
-
-// function buildNode(expression, node, precedence, targetPrecedence) {
-//     if (expression === [] || expression === undefined) return;
-
-//     node.addChild(expression[0]);
-
-//     if (expression[2] === undefined) {
-//         node.addChild(expression[1]);
-//         return "";
-//     } else {
-//         if (checkOperator(expression[2]) <= targetPrecedence) {
-//             node.addChild(expression[1]);
-//             return expression.slice(2);
-//         }
-//     }
-//     if (checkOperator(expression[2]) == precedence) {
-//         node.addChild(expression[1]);
-//         buildNode(expression.slice(2), node, precedence, targetPrecedence);
-//     }
-//     if (checkOperator(expression[2]) > precedence) {
-//         let [newNode, remainingString] = buildTree(expression.slice(1), precedence);
-//         node.addChild(newNode);
-//         newNode.addParent(node);
-//         buildNode(remainingString, node, checkOperator(expression[0]), targetPrecedence);
-//     }
-//     if (checkOperator(expression[2]) < precedence) {
-//         node.addChild(expression[1]);
-//         let newNode = new Node();
-//         newNode.addChild(node);
-//         node.addParent(newNode);
-//         buildNode(expression.slice(2), newNode, checkOperator(expression[2]), targetPrecedence);
-//     }
-// }
 
 export function buildParsedTree(rootNode, roseTreeRootNode) {
     let previousChild = undefined;
@@ -471,41 +424,27 @@ function initWhiteboard() {
             },
         });
 
-        ///////////////////////////////////////////////////////////////////
-        // whiteboard.drawPenLine(100, 100, 109, 100, "black", 1);
-        // whiteboard.drawPenLine(100, 120, 109.5, 120, "black", 1);
-
-        // fs.readFile('../exp.inkml', 'utf-8', async (err, data) => {
-        //     if (err) {
-        //       console.error(err);
-        //       return;
-        //     }
-        // const inkml = await parseStringPromise(data);
-        // const traces = inkml.ink.trace;
-        // for (const trace of traces) {
-        //   const points = trace._.split(';').map(p => p.split(',').map(parseFloat));
-        //   const xs = points.map(p => p[0]);
-        //   const ys = points.map(p => p[1]);
-        //   const minX = Math.min(...xs);
-        //   const maxX = Math.max(...xs);
-        //   const minY = Math.min(...ys);
-        //   const maxY = Math.max(...ys);
-        //   const width = maxX - minX;
-        //   const height = maxY - minY;
-        //   const scaleX = 800 / width;
-        //   const scaleY = 800 / height;
-        //   for (let i = 1; i < points.length; i++) {
-        //     const [x1, y1] = points[i - 1];
-        //     const [x2, y2] = points[i];
-        //     const newX1 = (x1 - minX) * scaleX;
-        //     const newY1 = (y1 - minY) * scaleY;
-        //     const newX2 = (x2 - minX) * scaleX;
-        //     const newY2 = (y2 - minY) * scaleY;
-        //     whiteboard.drawPenLine(newX1, newY1, newX2, newY2, 'black', 3);
-        //   }
-        // }
-        // });
-        //////////////////////////////////////////////////////////////////
+        let content = [];
+        let newContent = {};
+        let newCoordinates = [-10000, -10000, -10000, -10000];
+        newContent["t"] = "pen";
+        newContent["d"] = newCoordinates;
+        newContent["c"] = "black";
+        newContent["username"] = whiteboard.settings.username;
+        newContent["th"] = 3;
+        newContent["tagName"] = '';
+        newContent["symbol"] = undefined;
+        content.push(newContent);
+        whiteboard.loadDataInSteps(
+            content,
+            true,
+            function (stepData, index) {
+                if (index >= content.length - 1) {
+                    //Done with all data
+                    whiteboard.drawId++;
+                }
+            }
+        );
 
         // request whiteboard from server
         $.get(subdir + "/api/loadwhiteboard", { wid: whiteboardId, at: accessToken }).done(
@@ -973,44 +912,11 @@ function initWhiteboard() {
             var reader = new FileReader();
 
             reader.onload = function (e) {
-                //try {
-                    // let expression123 = new Expression();
-                    // expression123.appendSymbol(new Symbol("a", 0, 'mi'));
-                    // expression123.appendSymbol(new Symbol("+", 1, 'mo'));
-                    // expression123.appendSymbol(new Symbol("b", 2, 'mi'));
-                    // expression123.appendSymbol(new Symbol("*", 3, 'mo'));
-                    // expression123.appendSymbol(new Symbol("c", 4, 'mi'));
-                    // expression123.appendSymbol(new Symbol("=", 5, 'mo'));
-                    // expression123.appendSymbol(new Symbol("d", 6, 'mi'));
-                    // // expression.appendSymbol(new Symbol("*", 7, 'mo'));
-                    // // expression.appendSymbol(new Symbol("e", 8, 'mi'));
-                    // // expression.appendSymbol(new Symbol("+", 9, 'mo'));
-                    // // expression.appendSymbol(new Symbol("f", 10, 'mi'));
-                    // // expression.appendSymbol(new Symbol("=", 11, 'mo'));
-                    // // expression.appendSymbol(new Symbol("g", 12, 'mi'));
-
-                    // expression.appendSymbol(new Symbol("a", 0, 'mi'));
-                    // expression.appendSymbol(new Symbol("+", 1, 'mo'));
-                    // expression.appendSymbol(new Symbol("b", 2, 'mi'));
-                    // expression.appendSymbol(new Symbol("=", 3, 'mo'));
-                    // expression.appendSymbol(new Symbol("c", 4, 'mi'));
-
-                    // let node123 = buildTree(expression123.symbols);
-                    // expression123.setRootNode(buildParsedTree(node123, new RoseTreeNode(true)));
-
-                    // console.log("ZAAAAAA");
-                    // console.log(expression123);
-
-                    // whiteboard.expression = expression;
-                    // //console.log(whiteboard.expression);
-
-                    // console.log(whiteboard.expandSelection(whiteboard.expression.rootNode.firstChild.firstChild.frontSibling, 2));
                     let expression = new Expression();
                     let parser = new DOMParser();
                     let xmlDoc = parser.parseFromString(e.target.result, "text/xml");
                     const traces = xmlDoc.getElementsByTagName("trace");
                     let traceGroups = xmlDoc.getElementsByTagName("traceGroup");
-                    //traceGroups = traceGroups[0].getElementsByTagName("traceGroup");
                     let minX = 999999;
                     let maxX = -999999;
                     let minY = 999999;
@@ -1032,22 +938,12 @@ function initWhiteboard() {
                     const meanY = (minY + maxY) / 2;
                     const originalWidth = meanX * 2;
                     const originalHeight = meanY * 2;
-                    const scaleX = originalWidth / 1600;
-                    const scaleY = originalHeight / 600;
-                    //////////
                     let currentWidth = maxX - minX;
                     let currentHeight = maxY - minY;
                     let aspectRatio = currentWidth / currentHeight;
                     let desiredWidth = 500;
                     let desiredHeight = desiredWidth / aspectRatio; 
-                    //////////
-                    console.log("maxX: ");
-                    console.log(maxX);
-                    console.log(xmlDoc.getElementsByTagName("mrow")[0]);
                     let ids = parseMathml(xmlDoc.getElementsByTagName("mrow")[0]);
-                    console.log("IDSSSSSSSSSS");
-                    console.log(ids);
-                    console.log(traceGroups);
 
                     for (let id of ids) {
                         for (let traceGroup of traceGroups) {
@@ -1073,14 +969,6 @@ function initWhiteboard() {
                                                 .split(",")
                                                 .map((p) => p.trim().split(" ").map(parseFloat));
                                             for (let i = 1; i < points.length; i++) {
-                                                // const x1 = points[i - 1][0] / scaleX;
-                                                // const y1 = points[i - 1][1] / scaleY;
-                                                // const newX1 = points[i][0] / scaleX;
-                                                // const newY1 = points[i][1] / scaleY;
-                                                // const x1 = points[i - 1][0];
-                                                // const y1 = points[i - 1][1];
-                                                // const newX1 = points[i][0];
-                                                // const newY1 = points[i][1];
                                                 const x1 = (points[i - 1][0] / currentWidth) * desiredWidth + 200;
                                                 const y1 = (points[i - 1][1] / currentHeight) * desiredHeight + 200;
                                                 const newX1 = (points[i][0] / currentWidth) * desiredWidth + 200;
@@ -1094,7 +982,6 @@ function initWhiteboard() {
                                                 newContent["th"] = 3;
                                                 newContent["tagName"] = id[1];
                                                 newContent["symbol"] = getSymbolFromId(xmlDoc.querySelector('mrow'), id[0]);
-                                                //console.log(traceGroup);
                                                 content.push(newContent);
                                             }
                                         }
@@ -1114,83 +1001,10 @@ function initWhiteboard() {
                         }
                     }
 
-                    console.log("SYMBOLSS");
-                    console.log(expression.symbols);
                     let node = buildTree(expression.symbols);
-                    console.log("NODE");
-                    console.log(node);
                     expression.setRootNode(buildParsedTree(node, new RoseTreeNode(true)));
 
                     whiteboard.expressions.push(expression);
-                    console.log(expression);
-
-                    // parseString(e.target.result, function(err, result) {
-                    //     const traces = result.ink.trace;
-                    //     const traceGroups = result.ink.traceGroup[0].traceGroup;
-                    //     let minX = 999999;
-                    //     let maxX = -999999;
-                    //     let minY = 999999;
-                    //     let maxY = -999999;
-                    //     for (let i = 0; i < traces.length; i++)
-                    //     {
-                    //         let points = traces[i]._.split(',').map(p => p.trim().split(' ').map(parseFloat));
-                    //         let tempMinX = Math.min(...points.map(p => p[0]));
-                    //         let tempMaxX = Math.max(...points.map(p => p[0]));
-                    //         let tempMinY = Math.min(...points.map(p => p[1]));
-                    //         let tempMaxY = Math.max(...points.map(p => p[1]));
-                    //         if (tempMinX < minX)
-                    //             minX = tempMinX;
-                    //         if (tempMaxX > maxX)
-                    //             maxX = tempMaxX;
-                    //         if (tempMinY < minY)
-                    //             minY = tempMinY;
-                    //         if (tempMaxY > maxY)
-                    //             maxY = tempMaxY;
-                    //     }
-                    //     const meanX = (minX + maxX) / 2;
-                    //     const meanY = (minY + maxY) / 2;
-                    //     const originalWidth = meanX * 2;
-                    //     const originalHeight = meanY * 2;
-                    //     const scaleX = originalWidth / 1600;
-                    //     const scaleY = originalHeight / 600;
-
-                    // for (let m = 0; m < traceGroups.length; m++)
-                    // {
-                    //     let content = [];
-                    //     for (let t = 0; t < traceGroups[m].traceView.length; t++)
-                    //     {
-                    //         for (let n = 0; n < traces.length; n++) {
-                    //             if (traces[n].$.id === traceGroups[m].traceView[t].$.traceDataRef)
-                    //             {
-                    //                 let points = traces[n]._.split(',').map(p => p.trim().split(' ').map(parseFloat));
-                    //                 for (let i = 1; i < points.length; i++) {
-                    //                     const x1 = points[i-1][0] / scaleX;
-                    //                     const y1 = points[i-1][1] / scaleY;
-                    //                     const newX1 = points[i][0] / scaleX;
-                    //                     const newY1 = points[i][1] / scaleY;
-                    //                     let newContent = {};
-                    //                     newContent["t"] = "pen";
-                    //                     newContent["d"] = [x1, y1, newX1, newY1];
-                    //                     newContent["c"] = "black";
-                    //                     newContent["username"] = whiteboard.settings.username;
-                    //                     newContent["th"] = 3;
-                    //                     console.log(traceGroups[m]);
-                    //                     content.push(newContent);
-                    //                 }
-                    //             }
-                    //         }
-                    //     }
-                    //     whiteboard.loadDataInSteps(content, true, function (stepData, index) {
-                    //         if (index >= content.length - 1) {
-                    //             //Done with all data
-                    //             whiteboard.drawId++;
-                    //         }
-                    //     });
-                    // }
-                    //});
-                // } catch (e) {
-                //     showBasicAlert("File was not a valid Inkml!");
-                // }
             };
             reader.readAsText(file);
             whiteboard.canvas.height = whiteboard.canvas.height;

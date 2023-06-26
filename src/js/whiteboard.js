@@ -78,8 +78,6 @@ const whiteboard = {
         }
     },
     swapOperator: function (gestureCoordinates) {
-        console.log("Gesture coordinates:");
-        console.log(gestureCoordinates);
         loop1: for (let item of this.drawBuffer) {
             if (
                 (item.d[0] - 10 <= gestureCoordinates.X &&
@@ -91,22 +89,14 @@ const whiteboard = {
                         item.d[3] - 10 <= gestureCoordinates.Y &&
                         item.d[3] + 10 >= gestureCoordinates.Y)
                         ) {
-                console.log("swapOperator");
                 for (let expression of this.expressions) {
                     for (let symbol of expression.symbols) {
                         if (symbol.drawId === item.drawId && symbol.tagName === "mo") {
-                            console.log("swap");
                             let operatorNode = this.getNodeFromDrawId(symbol.drawId, this.getExpressionFromDrawId(symbol.drawId).rootNode);
-                            console.log(operatorNode);
                             let backSiblingXCoordinates = this.getXCoordinatesFromNode(operatorNode.backSibling);
                             let operatorXCoordinates = this.getXCoordinatesFromNode(operatorNode);
                             let frontSiblingXCoordinates = this.getXCoordinatesFromNode(operatorNode.frontSibling);
-                            console.log(backSiblingXCoordinates);
-                            console.log(operatorXCoordinates);
-                            console.log(frontSiblingXCoordinates);
                             this.swapCoordinatesOfDrawBuffer(backSiblingXCoordinates, operatorXCoordinates, frontSiblingXCoordinates, operatorNode);
-                            //TODO?? change the order of the expression.symbols
-                            console.log("welelel");
                             expression.symbols = this.swapExpressionSymbols(expression.symbols, operatorNode, this.getDrawIdsFromNode(operatorNode.backSibling), this.getDrawIdsFromNode(operatorNode.frontSibling));
                             let node = buildTree(expression.symbols);
                             expression.setRootNode(buildParsedTree(node, new RoseTreeNode(true)));
@@ -150,8 +140,6 @@ const whiteboard = {
         let backSiblingVector = -backSibling.X2 + frontSibling.X2;
         let operatorVector = backSibling.X1 + frontSibling.X2 - operator.X2 - operator.X1;
         let frontSiblingVector = backSibling.X1 - frontSibling.X1;
-        console.log(backSiblingIds);
-        console.log(frontSiblingIds);
         for (let item of this.drawBuffer) {
             if (backSiblingIds.includes(item.drawId)) {
                 item.d[0] = item.d[0] + backSiblingVector;
@@ -216,14 +204,12 @@ const whiteboard = {
         }
     },
     copySelection: function (gestureCoordinates) {
-        // console.log(this.selectedSymbols);
-        // console.log(gestureCoordinates);
-        // console.log(this.drawBuffer);
         let sumX = 0;
         let sumY = 0;
         let totalCoordinates = 0;
         let expression = new Expression();
         let filteredDrawBuffer = this.drawBuffer.filter(item => { return this.selectedSymbols.some(symbol => symbol.drawId === item.drawId);});
+        let originalExpression = this.getExpressionFromDrawId(this.selectedSymbols[0].drawId);
 
         for (let i = 0; i < filteredDrawBuffer.length; i++) {
             const coordinates = filteredDrawBuffer[i].d;
@@ -244,38 +230,36 @@ const whiteboard = {
             return acc;
         }, {});
         listedFilteredDrawBuffer = Object.values(listedFilteredDrawBuffer);
-
-        console.log("Welelelel");
-        console.log(filteredDrawBuffer);
-        console.log(listedFilteredDrawBuffer);
-        
-        for (let list of listedFilteredDrawBuffer) {
-            let content = [];
-            let newSymbol = new Symbol(list[0]["symbol"], this.drawId, list[0]["tagName"]);
-            expression.appendSymbol(newSymbol);
-            for (let item of list) {
-                let newContent = {};
-                let newCoordinates = [item["d"][0] + vector.X, item["d"][1] + vector.Y, item["d"][2] + vector.X, item["d"][3] + vector.Y];
-                newContent["t"] = item["t"];
-                newContent["d"] = newCoordinates;
-                newContent["c"] = "black";
-                newContent["username"] = whiteboard.settings.username;
-                newContent["th"] = 3;
-                newContent["tagName"] = item["tagName"];
-                newContent["symbol"] = item["symbol"];
-                content.push(newContent);
-            }
-            this.loadDataInSteps(
-                content,
-                true,
-                function (stepData, index) {
-                    if (index >= content.length - 1) {
-                        //Done with all data
-                        this.drawId++;
-                        //console.log(this.drawId);
+        for (let symbol of originalExpression.symbols) {
+            for (let list of listedFilteredDrawBuffer) {
+                if (list[0].drawId === symbol.drawId) {
+                    let content = [];
+                    let newSymbol = new Symbol(list[0]["symbol"], this.drawId, list[0]["tagName"]);
+                    expression.appendSymbol(newSymbol);
+                    for (let item of list) {
+                        let newContent = {};
+                        let newCoordinates = [item["d"][0] + vector.X, item["d"][1] + vector.Y, item["d"][2] + vector.X, item["d"][3] + vector.Y];
+                        newContent["t"] = item["t"];
+                        newContent["d"] = newCoordinates;
+                        newContent["c"] = "black";
+                        newContent["username"] = whiteboard.settings.username;
+                        newContent["th"] = 3;
+                        newContent["tagName"] = item["tagName"];
+                        newContent["symbol"] = item["symbol"];
+                        content.push(newContent);
                     }
-                }.bind(this)
-            );
+                    this.loadDataInSteps(
+                        content,
+                        true,
+                        function (stepData, index) {
+                            if (index >= content.length - 1) {
+                                //Done with all data
+                                this.drawId++;
+                            }
+                        }.bind(this)
+                    );
+                }
+            }
         }
 
         let node = buildTree(expression.symbols);
@@ -360,7 +344,6 @@ const whiteboard = {
     },
     getOneFrontExpansion: function (node) {
         let result = [];
-        console.log(node);
         if (node.frontSibling == undefined) {
             if (node.parent == undefined) {
                 return result;
@@ -392,9 +375,6 @@ const whiteboard = {
         return result;
     },
     expandSelection: function (node, amountPressed) {
-        console.log("zaaaa");
-        console.log(amountPressed);
-        console.log(node);
         if (node.symbol.tagName == "mo") {
             let symbolsBackExpansion = this.getAllSymbolsBackExpansion(node.backSibling);
             let result = symbolsBackExpansion.concat(
@@ -415,7 +395,6 @@ const whiteboard = {
         return true;
     },
     distribute: function (firstNode, lastNode) {
-        console.log("In distribute function");
         let originalExpression = this.getExpressionFromDrawId(firstNode.symbol.drawId);
         let expressionFirstSymbolsIds = [];
         let expressionMiddleSymbolsIds = [];
@@ -447,9 +426,6 @@ const whiteboard = {
                 expressionLastSymbolsIds.push(symbol.drawId);
             }
         }
-        console.log(expressionFirstSymbolsIds);
-        console.log(expressionMiddleSymbolsIds);
-        console.log(expressionLastSymbolsIds);
         let outsideVariableXCoordinates = this.getXCoordinatesFromNode(firstNode.backSibling);
         let outsideOperatorXCoordinates = this.getXCoordinatesFromNode(firstNode);
         let openingParenthesesXCoordinates = this.getXCoordinatesFromNode(lastNode.backSibling.backSibling);
@@ -457,13 +433,6 @@ const whiteboard = {
         let insideOperatorXCoordinates = this.getXCoordinatesFromNode(lastNode);
         let insideSecondVariableXCoordinates = this.getXCoordinatesFromNode(lastNode.frontSibling);
         let closingParenthesesXCoordinates = this.getXCoordinatesFromNode(lastNode.frontSibling.frontSibling);
-        console.log(outsideVariableXCoordinates);
-        console.log(outsideOperatorXCoordinates);
-        console.log(openingParenthesesXCoordinates);
-        console.log(insideFirstVariableXCoordinates);
-        console.log(insideOperatorXCoordinates);
-        console.log(insideSecondVariableXCoordinates);
-        console.log(closingParenthesesXCoordinates);
 
         const symbolsWithObjects = expressionSymbolsIds.map(drawId => {
             const associatedObjects = this.drawBuffer
@@ -498,7 +467,6 @@ const whiteboard = {
                     if (index >= content.length - 1) {
                         //Done with all data
                         this.drawId++;
-                        //console.log(this.drawId);
                     }
                 }.bind(this)
             );
@@ -527,7 +495,6 @@ const whiteboard = {
                 if (index >= content.length - 1) {
                     //Done with all data
                     this.drawId++;
-                    //console.log(this.drawId);
                 }
             }.bind(this)
         );
@@ -556,7 +523,6 @@ const whiteboard = {
                     if (index >= content.length - 1) {
                         //Done with all data
                         this.drawId++;
-                        //console.log(this.drawId);
                     }
                 }.bind(this)
                 );
@@ -586,7 +552,6 @@ const whiteboard = {
                     if (index >= content.length - 1) {
                         //Done with all data
                         this.drawId++;
-                        //console.log(this.drawId);
                     }
                 }.bind(this)
                 );
@@ -616,7 +581,6 @@ const whiteboard = {
                     if (index >= content.length - 1) {
                         //Done with all data
                         this.drawId++;
-                        //console.log(this.drawId);
                     }
                 }.bind(this)
                 );
@@ -646,7 +610,6 @@ const whiteboard = {
                     if (index >= content.length - 1) {
                         //Done with all data
                         this.drawId++;
-                        //console.log(this.drawId);
                     }
                 }.bind(this)
                 );
@@ -676,7 +639,6 @@ const whiteboard = {
                     if (index >= content.length - 1) {
                         //Done with all data
                         this.drawId++;
-                        //console.log(this.drawId);
                     }
                 }.bind(this)
                 );
@@ -706,7 +668,6 @@ const whiteboard = {
                     if (index >= content.length - 1) {
                         //Done with all data
                         this.drawId++;
-                        //console.log(this.drawId);
                     }
                 }.bind(this)
                 );
@@ -736,7 +697,6 @@ const whiteboard = {
                     if (index >= content.length - 1) {
                         //Done with all data
                         this.drawId++;
-                        //console.log(this.drawId);
                     }
                 }.bind(this)
                 );
@@ -766,7 +726,6 @@ const whiteboard = {
                     if (index >= content.length - 1) {
                         //Done with all data
                         this.drawId++;
-                        //console.log(this.drawId);
                     }
                 }.bind(this)
                 );
@@ -796,7 +755,6 @@ const whiteboard = {
                     if (index >= content.length - 1) {
                         //Done with all data
                         this.drawId++;
-                        //console.log(this.drawId);
                     }
                 }.bind(this)
                 );
@@ -826,7 +784,6 @@ const whiteboard = {
                     if (index >= content.length - 1) {
                         //Done with all data
                         this.drawId++;
-                        //console.log(this.drawId);
                     }
                 }.bind(this)
                 );
@@ -856,7 +813,6 @@ const whiteboard = {
                     if (index >= content.length - 1) {
                         //Done with all data
                         this.drawId++;
-                        //console.log(this.drawId);
                     }
                 }.bind(this)
             );
@@ -870,61 +826,23 @@ const whiteboard = {
             }
         }
 
-        console.log(expression.symbols);
         let node = buildTree(expression.symbols);
         expression.setRootNode(buildParsedTree(node, new RoseTreeNode(true)));
 
         whiteboard.expressions.push(expression);
-        console.log(expression);
         
         whiteboard.canvas.height = whiteboard.canvas.height;
         whiteboard.imgContainer.empty();
         whiteboard.loadDataInSteps(whiteboard.drawBuffer, false, function (stepData) {
             //Nothing to do
         });
-        
-        // for (let list of listedFilteredDrawBuffer) {
-            //     let content = [];
-        //     let newSymbol = new Symbol(list[0]["symbol"], this.drawId, list[0]["tagName"]);
-        //     expression.appendSymbol(newSymbol);
-        //     for (let item of list) {
-        //         let newContent = {};
-        //         let newCoordinates = [item["d"][0] + vector.X, item["d"][1] + vector.Y, item["d"][2] + vector.X, item["d"][3] + vector.Y];
-        //         newContent["t"] = item["t"];
-        //         newContent["d"] = newCoordinates;
-        //         newContent["c"] = "black";
-        //         newContent["username"] = whiteboard.settings.username;
-        //         newContent["th"] = 3;
-        //         newContent["tagName"] = item["tagName"];
-        //         newContent["symbol"] = item["symbol"];
-        //         content.push(newContent);
-        //     }
-        //     this.loadDataInSteps(
-        //         content,
-        //         true,
-        //         function (stepData, index) {
-        //             if (index >= content.length - 1) {
-        //                 //Done with all data
-        //                 this.drawId++;
-        //                 //console.log(this.drawId);
-        //             }
-        //         }.bind(this)
-        //     );
-        // }
 
-        // let distributed
-        // for (let item of this.drawBuffer) {
-        //     if (expressionFirstSymbolsIds.includes(item["drawId"])) {
-
-        //     }
-        //     else if (expressionMiddleSymbolsIds.includes(item["drawId"])) {
-
-        //     }
-        //     else if (expressionLastSymbolsIds.includes(item["drawId"])) {
-
-        //     }
-        // }
-
+    },
+    getFirstSymbolInExp: function (node) {
+        if (node.firstChild.exp !== true) {
+            return node.firstChild.symbol;
+        }
+        return this.getFirstSymbolInExp(node.firstChild);
     },
     loadWhiteboard: function (whiteboardContainer, newSettings) {
         const svgns = "http://www.w3.org/2000/svg";
@@ -986,193 +904,82 @@ const whiteboard = {
         this.ctx = this.canvas.getContext("2d");
         this.oldGCO = this.ctx.globalCompositeOperation;
 
-        //////////////////////////////////
-        // let myElement = document.getElementById("whiteboardContainer");
-        // // Define the "V" shape recognizer
-        // var VShapeRecognizer = {
-        //     name: "v-shape",
-        //     index: 1,
-        //     defaults: {
-        //         threshold: 0.2,
-        //         pointers: 1,
-        //         direction: Hammer.DIRECTION_ALL,
-        //         recognizeWith: { line: [Hammer.DIRECTION_HORIZONTAL] },
-        //     },
-        //     attrTest: function (e) {
-        //         var start = e.gesture.startEvent.center;
-        //         var end = e.gesture.center;
-        //         var deltaX = end.clientX - start.clientX;
-        //         var deltaY = end.clientY - start.clientY;
-
-        //         // Calculate the angle of the gesture
-        //         var angle = (Math.atan2(deltaY, deltaX) * 180) / Math.PI;
-
-        //         // Check if the angle is within a certain range to form a "V" shape
-        //         if (angle > 45 && angle < 135) {
-        //             return true;
-        //         }
-        //         return false;
-        //     },
-        // };
-        // var mc = new Hammer.Manager(myElement);
-
-        // // Register the custom "V" shape recognizer
-        // Hammer.plugins.register(VShapeRecognizer);
-
-        // // Define the "V" gesture recognizer
-        // var VGesture = new Hammer.Pan({
-        //     event: "v",
-        //     pointers: 1,
-        //     threshold: 10,
-        //     direction: Hammer.DIRECTION_ALL,
-        //     recognizeWith: { "v-shape": {} },
-        // });
-
-        // // Add the gesture recognizer to the Hammer.js manager
-        // mc.add(VGesture);
-
-        // // Bind the "V" gesture event to a callback function
-        // mc.on("v", function (e) {
-        //     console.log("V gesture detected!");
-        // });
-
-        // // Register the custom "V" gesture recognizer
-        // Hammer.gestures.add(Hammer.Gesture.V);
-
-        // // Add the gesture recognizer to the Hammer.js manager
-        // mc.add(new Hammer.Gesture.V({}));
-
-        // // Bind the "V" gesture event to a callback function
-        // mc.on("V", function (e) {
-        //     console.log("V gesture detected!");
-        // });
-
-        // hammertime.add(
-        //     new Hammer.Recognizer({
-        //         event: 'v',
-        //         pointers: 1,
-        //         threshold: 20,
-        //         recognizeWith: ['circle'],
-        //         emitOnMove: true,
-        //         lastTouchEvent: null,
-        //         checkDirection: function(event) {
-        //         if (this.lastTouchEvent) {
-        //             const deltaX = event.center.x - this.lastTouchEvent.center.x;
-        //             const deltaY = event.center.y - this.lastTouchEvent.center.y;
-        //             const angle = Math.atan2(deltaY, deltaX) * 180 / Math.PI;
-        //             return (angle > -135 && angle < -45);
-        //         }
-        //         return false;
-        //         },
-        //         reset: function() {
-        //         this.lastTouchEvent = null;
-        //         },
-        //         recognize: function(event) {
-        //         const eventType = event.type;
-        //         const touches = event.touches.length;
-        //         const touchType = 'end'; // set touchType to "end"
-        //         if (eventType === touchType) {
-        //             if (this.checkDirection(event)) {
-        //             this.emit(this.options.event, event);
-        //             this.reset();
-        //             }
-        //         } else {
-        //             this.lastTouchEvent = event;
-        //         }
-        //         }
-        //     })
-        // );
-        // hammertime.on('v', function(event) {
-        //     console.log('V gesture detected!');
-        //   });
-        // hammertime.add(
-        //     new Hammer.Swipe({
-        //         event: 'swiperight',
-        //         direction: Hammer.DIRECTION_RIGHT,
-        //         threshold: 20,
-        //         velocity: 0.1
-        //     })
-        // );
-        // hammertime.on('swiperight', function(event) {
-        //     console.log('Swipe right gesture detected!');
-        // });
-
         const whiteboard = document.getElementById("whiteboardContainer");
         whiteboard.addEventListener('mousedown', startGesture.bind(this));
         whiteboard.addEventListener('mousemove', continueGesture.bind(this));
         whiteboard.addEventListener('mouseup', endGesture.bind(this));
 
         function startGesture(event) {
-            this.gesturePath = [{X: event.clientX, Y: event.clientY}];
+            if (this.tool === "structurer") {
+                this.gesturePath = [{X: event.clientX - this.viewCoords.x, Y: event.clientY - this.viewCoords.y}];
+            }
         }
 
         function continueGesture(event) {
-            if (this.gesturePath.length > 0) {
-                this.gesturePath.push({X: event.clientX, Y: event.clientY });
+            if (this.tool === "structurer") {
+                if (this.gesturePath.length > 0) {
+                    this.gesturePath.push({X: event.clientX - this.viewCoords.x, Y: event.clientY - this.viewCoords.y });
+                }
             }
         }
 
         function endGesture() {
-            if (this.gesturePath.length > 1) {
-                
-                let firstDrawId = undefined;
-                let lastDrawId = undefined;
-                for (let item of this.drawBuffer) {
-                    if (
-                        (item.d[0] - 4 <= this.gesturePath[0].X &&
-                            item.d[0] + 4 >= this.gesturePath[0].X &&
-                            item.d[1] - 4 <= this.gesturePath[0].Y &&
-                            item.d[1] + 4 >= this.gesturePath[0].Y) ||
-                        (item.d[2] - 4 <= this.gesturePath[0].X &&
-                            item.d[2] + 4 >= this.gesturePath[0].X &&
-                            item.d[3] - 4 <= this.gesturePath[0].Y &&
-                            item.d[3] + 4 >= this.gesturePath[0].Y)
-                    ) {
-                        firstDrawId = item.drawId;
-                        break;
+            if (this.tool === "structurer") {
+                if (this.gesturePath.length > 1) {
+                    
+                    let firstDrawId = undefined;
+                    let lastDrawId = undefined;
+                    for (let item of this.drawBuffer) {
+                        if (
+                            (item.d[0] - 4 <= this.gesturePath[0].X &&
+                                item.d[0] + 4 >= this.gesturePath[0].X &&
+                                item.d[1] - 4 <= this.gesturePath[0].Y &&
+                                item.d[1] + 4 >= this.gesturePath[0].Y) ||
+                            (item.d[2] - 4 <= this.gesturePath[0].X &&
+                                item.d[2] + 4 >= this.gesturePath[0].X &&
+                                item.d[3] - 4 <= this.gesturePath[0].Y &&
+                                item.d[3] + 4 >= this.gesturePath[0].Y)
+                        ) {
+                            firstDrawId = item.drawId;
+                            break;
+                        }
                     }
+                    for (let item of this.drawBuffer) {
+                        if (
+                            (item.d[0] - 4 <= event.clientX - this.viewCoords.x &&
+                                item.d[0] + 4 >= event.clientX - this.viewCoords.x &&
+                                item.d[1] - 4 <= event.clientY - this.viewCoords.y &&
+                                item.d[1] + 4 >= event.clientY - this.viewCoords.y) ||
+                            (item.d[2] - 4 <= event.clientX - this.viewCoords.x &&
+                                item.d[2] + 4 >= event.clientX - this.viewCoords.x &&
+                                item.d[3] - 4 <= event.clientY - this.viewCoords.y &&
+                                item.d[3] + 4 >= event.clientY - this.viewCoords.y)
+                        ) {
+                            lastDrawId = item.drawId;
+                            break;
+                        }
+                    }
+                    
+                    if (firstDrawId !== undefined && lastDrawId !== undefined && this.tool) {
+                        let firstNode = this.getNodeFromDrawId(firstDrawId, this.getExpressionFromDrawId(firstDrawId).rootNode);
+                        let lastNode = this.getNodeFromDrawId(lastDrawId, this.getExpressionFromDrawId(lastDrawId).rootNode);
+                        if (this.getFirstSymbolInExp(firstNode.frontSibling) === lastNode.backSibling.backSibling.symbol && this.canBeDistributed(this.getParentFromNode(lastNode))) {
+                            //distribuir
+                            this.distribute(firstNode, lastNode);
+                        }
+                    }
+                    else {
+                        let gesture = new DollarRecognizer().Recognize(this.gesturePath, true).Name;
+                        let gestureCoordinates = this.getGestureCoordinates(this.gesturePath);
+                        if (gesture == "v" || gesture == "check") {
+                            this.copySelection(gestureCoordinates);
+                        }
+                        if (gesture == "circle") {
+                            this.swapOperator(gestureCoordinates);
+                        }
+                    }
+    
                 }
-                for (let item of this.drawBuffer) {
-                    if (
-                        (item.d[0] - 4 <= event.clientX &&
-                            item.d[0] + 4 >= event.clientX &&
-                            item.d[1] - 4 <= event.clientY &&
-                            item.d[1] + 4 >= event.clientY) ||
-                        (item.d[2] - 4 <= event.clientX &&
-                            item.d[2] + 4 >= event.clientX &&
-                            item.d[3] - 4 <= event.clientY &&
-                            item.d[3] + 4 >= event.clientY)
-                    ) {
-                        lastDrawId = item.drawId;
-                        break;
-                    }
-                }
-                
-                if (firstDrawId !== undefined && lastDrawId !== undefined) {
-                    let firstNode = this.getNodeFromDrawId(firstDrawId, this.getExpressionFromDrawId(firstDrawId).rootNode);
-                    let lastNode = this.getNodeFromDrawId(lastDrawId, this.getExpressionFromDrawId(lastDrawId).rootNode);
-                    if (this.getParentFromNode(lastNode) === firstNode.frontSibling && this.canBeDistributed(this.getParentFromNode(lastNode))) {
-                        //distribuir
-                        this.distribute(firstNode, lastNode); //<-- fazer esta função (tenho que ter em atenção as coordenadas estilo swap)
-                    }
-                }
-                else {
-                    console.log(this.gesturePath);
-                    let gesture = new DollarRecognizer().Recognize(this.gesturePath, true).Name;
-                    console.log(gesture);
-                    let gestureCoordinates = this.getGestureCoordinates(this.gesturePath);
-                    if (gesture == "v" || gesture == "check") {
-                        console.log("v or check");
-                        this.copySelection(gestureCoordinates);
-                        //console.log(this.gesturePath);
-                        //do something
-                    }
-                    if (gesture == "circle") {
-                        console.log("circle");
-                        this.swapOperator(gestureCoordinates);
-                    }
-                }
-
             }
             
             // Clear the gesture path for the next gesture
@@ -1191,36 +998,33 @@ const whiteboard = {
             _this.loadData(dbCp); // draw old content in
         });
 
-        // $(_this.mouseOverlay).on("mousedown touchstart", function (e) {
-        //     _this.mousedown(e);
-        // });
-
-        _this.clicks = 0;
-        $(_this.mouseOverlay).on("mouseup", function (e) {
-            if (_this.clicks === 0) {
-                // Single click detected
-                _this.clicks = 1;
-                setTimeout(function () {
-                    if (_this.clicks === 1) {
-                        // Single click action
-                        console.log("Single click");
-                        console.log(this.drawId);
-                        _this.mousedown(e);
-                    } else {
-                        // Double click action
-                        console.log("Double click");
-                        _this.mouseDoubleClick(e);
-                    }
-                    _this.clicks = 0;
-                }, 200); // Change this value to adjust the timeout duration
-            } else {
-                _this.clicks = 2;
+        $(_this.mouseOverlay).on("mousedown touchstart", function (e) {
+            if (_this.tool !== "structurer") {
+                _this.mousedown(e);
             }
         });
 
-        // $(_this.mouseOverlay).on("dblclick", function (e) {
-        //     _this.mouseDoubleClick(e);
-        // });
+        _this.clicks = 0;
+        $(_this.mouseOverlay).on("mouseup", function (e) {
+            if (_this.tool === "structurer") {
+                if (_this.clicks === 0) {
+                    // Single click detected
+                    _this.clicks = 1;
+                    setTimeout(function () {
+                        if (_this.clicks === 1) {
+                            // Single click action
+                            _this.mousedown(e);
+                        } else {
+                            // Double click action
+                            _this.mouseDoubleClick(e);
+                        }
+                        _this.clicks = 0;
+                    }, 200); // Change this value to adjust the timeout duration
+                } else {
+                    _this.clicks = 2;
+                }
+            }
+        });
 
         _this.mouseDoubleClick = function (e) {
             if (_this.imgDragActive || _this.drawFlag) {
@@ -1233,7 +1037,6 @@ const whiteboard = {
             const currentPos = Point.fromEvent(e);
 
             if (_this.tool === "structurer") {
-                console.log("Structurer double click activated!");
                 for (let selected of this.selectedSymbols) {
                     for (let item of this.drawBuffer) {
                         if (item.drawId === selected.drawId) {
@@ -1244,23 +1047,20 @@ const whiteboard = {
                 this.selectedSymbols = [];
                 loop1: for (let item of this.drawBuffer) {
                     if (
-                        (item.d[0] - 4 <= currentPos.x &&
-                            item.d[0] + 4 >= currentPos.x &&
-                            item.d[1] - 4 <= currentPos.y &&
-                            item.d[1] + 4 >= currentPos.y) ||
-                        (item.d[2] - 4 <= currentPos.x &&
-                            item.d[2] + 4 >= currentPos.x &&
-                            item.d[3] - 4 <= currentPos.y &&
-                            item.d[3] + 4 >= currentPos.y)
+                        (item.d[0] - 4 <= currentPos.x - _this.viewCoords.x &&
+                            item.d[0] + 4 >= currentPos.x - _this.viewCoords.x &&
+                            item.d[1] - 4 <= currentPos.y - _this.viewCoords.y &&
+                            item.d[1] + 4 >= currentPos.y - _this.viewCoords.y) ||
+                        (item.d[2] - 4 <= currentPos.x - _this.viewCoords.x &&
+                            item.d[2] + 4 >= currentPos.x - _this.viewCoords.x &&
+                            item.d[3] - 4 <= currentPos.y - _this.viewCoords.y &&
+                            item.d[3] + 4 >= currentPos.y - _this.viewCoords.y)
                     ) {
                         for (let expression of this.expressions) {
                             for (let symbol of expression.symbols) {
                                 if (symbol.drawId === item.drawId) {
                                     if (symbol.drawId === this.pressedSymbol.drawId) {
                                         this.pressedSymbol.amountPressed++;
-                                        console.log("Before");
-                                        console.log(this.pressedSymbol.drawId);
-                                        console.log(this.getExpressionFromDrawId(this.pressedSymbol.drawId).rootNode);
                                         this.selectedSymbols = this.expandSelection(
                                             this.getNodeFromDrawId(
                                                 this.pressedSymbol.drawId,
@@ -1272,9 +1072,6 @@ const whiteboard = {
                                     } else {
                                         this.pressedSymbol.drawId = item.drawId;
                                         this.pressedSymbol.amountPressed = 2;
-                                        console.log("Before");
-                                        console.log(this.pressedSymbol.drawId);
-                                        console.log(this.getExpressionFromDrawId(this.pressedSymbol.drawId).rootNode);
                                         this.selectedSymbols = this.expandSelection(
                                             this.getNodeFromDrawId(
                                                 this.pressedSymbol.drawId,
@@ -1295,7 +1092,6 @@ const whiteboard = {
                 this.loadDataInSteps(this.drawBuffer, false, function (stepData) {
                     //Nothing to do
                 });
-                console.log(this.drawBuffer);
             }
         };
 
@@ -1319,8 +1115,6 @@ const whiteboard = {
                     currentPos.y,
                 ];
             } else if (_this.tool === "structurer") {
-                console.log("X:", currentPos.x);
-                console.log("Y:", currentPos.y);
                 for (let selected of this.selectedSymbols) {
                     for (let item of this.drawBuffer) {
                         if (item.drawId === selected.drawId) {
@@ -1331,17 +1125,16 @@ const whiteboard = {
                 this.selectedSymbols = [];
                 loop1: for (let item of this.drawBuffer) {
                     if (
-                        (item.d[0] - 4 <= currentPos.x &&
-                            item.d[0] + 4 >= currentPos.x &&
-                            item.d[1] - 4 <= currentPos.y &&
-                            item.d[1] + 4 >= currentPos.y) ||
-                        (item.d[2] - 4 <= currentPos.x &&
-                            item.d[2] + 4 >= currentPos.x &&
-                            item.d[3] - 4 <= currentPos.y &&
-                            item.d[3] + 4 >= currentPos.y)
+                        (item.d[0] - 4 <= currentPos.x - _this.viewCoords.x &&
+                            item.d[0] + 4 >= currentPos.x - _this.viewCoords.x &&
+                            item.d[1] - 4 <= currentPos.y - _this.viewCoords.y &&
+                            item.d[1] + 4 >= currentPos.y - _this.viewCoords.y) ||
+                        (item.d[2] - 4 <= currentPos.x - _this.viewCoords.x &&
+                            item.d[2] + 4 >= currentPos.x - _this.viewCoords.x &&
+                            item.d[3] - 4 <= currentPos.y - _this.viewCoords.y &&
+                            item.d[3] + 4 >= currentPos.y - _this.viewCoords.y)
                     ) {
                         for (let expression of this.expressions) {
-                            console.log("yay");
                             for (let symbol of expression.symbols) {
                                 if (symbol.drawId === item.drawId) {
                                     this.selectDrawId(item.drawId);
@@ -1357,7 +1150,6 @@ const whiteboard = {
                 this.loadDataInSteps(this.drawBuffer, false, function (stepData) {
                     //Nothing to do
                 });
-                console.log(this.drawBuffer);
             } else if (_this.tool === "hand") {
                 _this.startCoords = currentPos;
             } else if (_this.tool === "eraser") {
