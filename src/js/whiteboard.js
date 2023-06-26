@@ -1855,6 +1855,11 @@ const whiteboard = {
         _this.drawBuffer = [];
         _this.undoBuffer = [];
         _this.drawId = 0;
+        _this.gesturePath = [];
+        _this.expressions = [];
+        _this.pressedSymbol = { drawId: null, amountPressed: null };
+        _this.selectedSymbols = [];
+        _this.selectionCoordinates = null;
     },
     setStrokeThickness(thickness) {
         var _this = this;
