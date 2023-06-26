@@ -1115,6 +1115,7 @@ const whiteboard = {
                     currentPos.y,
                 ];
             } else if (_this.tool === "structurer") {
+                console.log(this.drawBuffer);
                 for (let selected of this.selectedSymbols) {
                     for (let item of this.drawBuffer) {
                         if (item.drawId === selected.drawId) {
@@ -1860,6 +1861,28 @@ const whiteboard = {
         _this.pressedSymbol = { drawId: null, amountPressed: null };
         _this.selectedSymbols = [];
         _this.selectionCoordinates = null;
+
+        let content = [];
+        let newContent = {};
+        let newCoordinates = [-10000, -10000, -10000, -10000];
+        newContent["t"] = "pen";
+        newContent["d"] = newCoordinates;
+        newContent["c"] = "black";
+        newContent["username"] = whiteboard.settings.username;
+        newContent["th"] = 3;
+        newContent["tagName"] = '';
+        newContent["symbol"] = undefined;
+        content.push(newContent);
+        _this.loadDataInSteps(
+            content,
+            true,
+            function (stepData, index) {
+                if (index >= content.length - 1) {
+                    //Done with all data
+                    _this.drawId++;
+                }
+            }
+        );
     },
     setStrokeThickness(thickness) {
         var _this = this;
